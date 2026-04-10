@@ -1,0 +1,245 @@
+// ─── localStorage persistence layer ─────────────────────────────────────────
+// Replaces the SQLite/Express backend. All data lives in the browser.
+
+export interface Exercise {
+  id: number;
+  name: string;
+  category: string;
+  weight: number;
+  maxReps: number;
+  sets: number;
+  lastReps: number | null;
+  personalBest: number | null;
+  sortOrder: number;
+  archived: boolean;
+}
+
+export interface Session {
+  id: number;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+export interface SessionSet {
+  id: number;
+  sessionId: number;
+  exerciseId: number;
+  weight: number;
+  repsAchieved: number;
+  isPb: boolean;
+  prevLastReps: number | null;
+  prevPersonalBest: number | null;
+}
+
+// ─── Keys ────────────────────────────────────────────────────────────────────
+
+const KEYS = {
+  exercises: "lt_exercises",
+  sessions: "lt_sessions",
+  sessionSets: "lt_session_sets",
+  nextId: "lt_next_id",
+} as const;
+
+// ─── ID generator ────────────────────────────────────────────────────────────
+
+function nextId(): number {
+  const val = parseInt(localStorage.getItem(KEYS.nextId) ?? "1", 10);
+  localStorage.setItem(KEYS.nextId, String(val + 1));
+  return val;
+}
+
+// ─── Generic helpers ─────────────────────────────────────────────────────────
+
+function load<T>(key: string): T[] {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
+  } catch {
+    return [];
+  }
+}
+
+function save<T>(key: string, data: T[]): void {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ─── Seed data (first run only) ──────────────────────────────────────────────
+
+function buildSeeds(): Exercise[] {
+  let order = 0;
+  const ex = (name: string, category: string, weight: number, maxReps: number, sets: number, lastReps: number): Exercise => ({
+    id: nextId(),
+    name, category, weight, maxReps, sets,
+    lastReps,
+    personalBest: lastReps,
+    sortOrder: order++,
+    archived: false,
+  });
+
+  return [
+    // ── Upper ──
+    ex("DB Row (Chest Supported)", "Upper", 28, 12, 3, 8),
+    ex("Unilateral Cable Row",     "Upper", 50, 12, 3, 8),
+    ex("Standing Cable Flys",      "Upper", 18, 12, 5, 8),
+    ex("Cable Pushdown",           "Upper", 32, 15, 3, 8),
+    ex("Chin-ups",                 "Upper",  0, 15, 2, 7),
+    ex("BB Curls",                 "Upper", 20, 12, 2, 8),
+    ex("DB Shrugs",                "Upper", 24, 12, 3, 8),
+
+    // ── Chest ──
+    ex("Pec Deck",            "Chest", 86, 12, 4, 9),
+    ex("DB Flys",             "Chest", 12, 15, 3, 12),
+    ex("DB Press",            "Chest", 22,  8, 3, 8),
+    ex("DB Shoulder Press",   "Chest", 16, 12, 3, 8),
+    ex("DB Lateral Raises",   "Chest",  4, 20, 3, 8),
+    ex("Roll Outs",           "Chest",  0, 15, 3, 8),
+
+    // ── Back ──
+    ex("Pull Ups",                  "Back",  0, 12, 3, 6),
+    ex("DB Rows",                   "Back", 30,  8, 3, 8),
+    ex("Cable Row",                 "Back", 59, 12, 3, 8),
+    ex("Close Grip Lat Pull-down",  "Back", 45, 15, 2, 8),
+    ex("Rear Delt Fly",             "Back", 45, 20, 3, 15),
+    ex("Face Pulls",                "Back", 36, 15, 3, 8),
+
+    // ── Legs ──
+    ex("BB RDL",                "Legs", 60,  8, 3, 8),
+    ex("Front Squat",           "Legs", 60,  8, 3, 6),
+    ex("Back Squat",            "Legs", 60,  8, 3, 6),
+    ex("BB Bulgarian Squats",   "Legs", 30,  8, 3, 8),
+    ex("Unilateral Leg Curl",   "Legs", 14,  8, 3, 7),
+    ex("Ab Crunch Machine",     "Legs", 38, 12, 3, 10),
+  ];
+}
+
+const DEFAULT_EXERCISES: Exercise[] = buildSeeds();
+
+export function initStorage(): void {
+  if (!localStorage.getItem(KEYS.exercises)) {
+    save(KEYS.exercises, DEFAULT_EXERCISES);
+  }
+}
+
+export function resetExercises(): void {
+  // Wipe only the exercises key, then re-seed
+  localStorage.removeItem(KEYS.exercises);
+  // nextId carries on from wherever it is — new exercises get fresh IDs
+  save(KEYS.exercises, buildSeeds());
+}
+
+export function replaceExercises(exercises: Omit<Exercise, "id">[]): void {
+  localStorage.removeItem(KEYS.exercises);
+  const withIds = exercises.map((ex) => ({ ...ex, id: nextId() }));
+  save(KEYS.exercises, withIds);
+}
+
+// ─── Exercises ───────────────────────────────────────────────────────────────
+
+export function getExercises(): Exercise[] {
+  return load<Exercise>(KEYS.exercises);
+}
+
+export function createExercise(data: Omit<Exercise, "id">): Exercise {
+  const exercises = getExercises();
+  const ex: Exercise = { ...data, id: nextId() };
+  save(KEYS.exercises, [...exercises, ex]);
+  return ex;
+}
+
+export function updateExercise(id: number, data: Partial<Exercise>): Exercise {
+  const exercises = getExercises();
+  const updated = exercises.map((ex) => ex.id === id ? { ...ex, ...data } : ex);
+  save(KEYS.exercises, updated);
+  return updated.find((ex) => ex.id === id)!;
+}
+
+export function deleteExercise(id: number): void {
+  const exercises = getExercises();
+  // Only allow deleting archived exercises
+  const ex = exercises.find((e) => e.id === id);
+  if (!ex?.archived) throw new Error("Exercise must be archived before deleting");
+  save(KEYS.exercises, exercises.filter((e) => e.id !== id));
+}
+
+// ─── Sessions ────────────────────────────────────────────────────────────────
+
+export function getSessions(): Session[] {
+  return load<Session>(KEYS.sessions);
+}
+
+export function getActiveSession(): Session | null {
+  return getSessions().find((s) => s.endedAt === null) ?? null;
+}
+
+export function startSession(): Session {
+  const session: Session = {
+    id: nextId(),
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+  };
+  save(KEYS.sessions, [...getSessions(), session]);
+  return session;
+}
+
+export function endSession(id: number): Session {
+  const sessions = getSessions();
+  const updated = sessions.map((s) =>
+    s.id === id ? { ...s, endedAt: new Date().toISOString() } : s
+  );
+  save(KEYS.sessions, updated);
+  return updated.find((s) => s.id === id)!;
+}
+
+// ─── Session Sets ─────────────────────────────────────────────────────────────
+
+export function getSessionSets(sessionId: number): SessionSet[] {
+  return load<SessionSet>(KEYS.sessionSets).filter((s) => s.sessionId === sessionId);
+}
+
+export function logSet(params: {
+  sessionId: number;
+  exerciseId: number;
+  weight: number;
+  repsAchieved: number;
+  isPb: boolean;
+}): SessionSet {
+  const exercises = getExercises();
+  const ex = exercises.find((e) => e.id === params.exerciseId)!;
+
+  // Snapshot current state before mutating
+  const set: SessionSet = {
+    id: nextId(),
+    ...params,
+    prevLastReps: ex.lastReps,
+    prevPersonalBest: ex.personalBest,
+  };
+
+  // Update exercise with new lastReps / personalBest
+  const newPb = params.isPb ? params.repsAchieved : ex.personalBest;
+  updateExercise(params.exerciseId, {
+    lastReps: params.repsAchieved,
+    personalBest: newPb,
+  });
+
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  save(KEYS.sessionSets, [...sets, set]);
+  return set;
+}
+
+export function undoSet(sessionId: number, exerciseId: number): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  // Find the most recent set for this exercise in this session
+  const idx = [...sets].reverse().findIndex(
+    (s) => s.sessionId === sessionId && s.exerciseId === exerciseId
+  );
+  if (idx === -1) return;
+  const realIdx = sets.length - 1 - idx;
+  const set = sets[realIdx];
+
+  // Restore exercise to its pre-set state
+  updateExercise(exerciseId, {
+    lastReps: set.prevLastReps,
+    personalBest: set.prevPersonalBest,
+  });
+
+  save(KEYS.sessionSets, sets.filter((_, i) => i !== realIdx));
+}

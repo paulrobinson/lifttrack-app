@@ -1146,7 +1146,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         )}
 
         {loggedReps === exercise.maxReps && (
-          <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-pb)", fontWeight: 600 }}>
+          <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
             Max reps hit — weight updated for next session
           </p>
         )}

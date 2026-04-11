@@ -35,8 +35,6 @@
     --color-text-faint: hsl(220 6% 38%);
     --color-success: hsl(142 71% 45%);
     --color-success-dim: hsl(142 40% 22%);
-    --color-pb: hsl(43 95% 58%);
-    --color-pb-bg: hsl(43 60% 20%);
     --color-warning: hsl(25 90% 58%);
     --color-rep-empty: hsl(220 10% 20%);
     --color-rep-filled: hsl(142 55% 38%);
@@ -143,28 +141,6 @@
   }
 
   .rep-square.filled .rep-label { color: hsl(142 40% 20%); }
-
-  /* ---- PB badge ---- */
-  .pb-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--color-pb-bg);
-    border: 1px solid hsl(43 60% 35%);
-    color: var(--color-pb);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 2px 8px 2px 6px;
-    border-radius: 99px;
-    animation: pb-pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-
-  @keyframes pb-pop {
-    from { transform: scale(0.5); opacity: 0; }
-    to   { transform: scale(1);   opacity: 1; }
-  }
 
   /* ---- Sortable card wrapper ---- */
   /* Prevent iOS text selection, magnifier, and copy callout on long press */
@@ -528,7 +504,12 @@
     border-radius: 50%;
     background: var(--color-success);
     color: hsl(142 40% 10%);
-    animation: pb-pop 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: pop-in 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes pop-in {
+    from { transform: scale(0.5); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
   }
 
   /* ---- Undo hint ---- */

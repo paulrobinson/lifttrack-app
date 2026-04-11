@@ -48,7 +48,7 @@ type ParseResult =
   | { ok: true; exercises: ParsedExercise[] }
   | { ok: false; error: ParseError };
 
-function parseImportText(text: string): ParseResult {
+export function parseImportText(text: string): ParseResult {
   const raw = text.split("\n");
   // Strip trailing empty lines
   const lines = raw.map((l) => l.trim());
@@ -491,7 +491,7 @@ function ResetButton({ onReset }: { onReset: () => void }) {
 // gzip-compress JSON, then base64url (A-Za-z0-9-_), no padding.
 // Safe for WhatsApp, Word, SMS — no special characters.
 
-async function encodeState(exercises: Exercise[]): Promise<string> {
+export async function encodeState(exercises: Exercise[]): Promise<string> {
   const json = JSON.stringify(exercises);
   const bytes = new TextEncoder().encode(json);
   const cs = new CompressionStream("gzip");
@@ -503,7 +503,7 @@ async function encodeState(exercises: Exercise[]): Promise<string> {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-async function decodeState(encoded: string): Promise<Exercise[]> {
+export async function decodeState(encoded: string): Promise<Exercise[]> {
   const b64 = encoded.trim().replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
   const binary = atob(padded);
@@ -518,7 +518,7 @@ async function decodeState(encoded: string): Promise<Exercise[]> {
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
-function buildExportText(exercises: Exercise[]): string {
+export function buildExportText(exercises: Exercise[]): string {
   const active = exercises.filter((e) => !e.archived);
   const seen: string[] = [];
   active.forEach((e) => { if (!seen.includes(e.category)) seen.push(e.category); });

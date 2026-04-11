@@ -66,6 +66,18 @@ type ParseResult =
   | { ok: true; exercises: ParsedExercise[] }
   | { ok: false; error: ParseError };
 
+export function computeSetOutcome(
+  reps: number,
+  weight: number,
+  prevReps: number | null,
+  prevWeight: number,
+): { decline: boolean; up: boolean } {
+  const prev = prevReps ?? 0;
+  const decline = reps < prev || weight < prevWeight;
+  const up = !decline && prev > 0 && reps > prev;
+  return { decline, up };
+}
+
 export function parseImportText(text: string): ParseResult {
   const raw = text.split("\n");
   // Strip trailing empty lines
@@ -1001,13 +1013,8 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const computeOutcome = (reps: number, weight: number): { decline: boolean; up: boolean } => {
-    const prevReps = exercise.lastReps ?? 0;
-    const prevWeight = exercise.weight;
-    const decline = reps < prevReps || weight < prevWeight;
-    const up = !decline && prevReps > 0 && reps > prevReps;
-    return { decline, up };
-  };
+  const computeOutcome = (reps: number, weight: number) =>
+    computeSetOutcome(reps, weight, exercise.lastReps, exercise.weight);
 
   const commitLog = (reps: number, weight: number) => {
     if (!sessionId) return;

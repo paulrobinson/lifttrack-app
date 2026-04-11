@@ -3,7 +3,7 @@
 // globals and remain accessible within the jsdom environment.
 
 import { describe, it, expect } from "vitest";
-import { parseImportText, buildExportText, encodeState, decodeState } from "./LiftTracker";
+import { parseImportText, buildExportText, encodeState, decodeState, computeSetOutcome } from "./LiftTracker";
 import type { Exercise } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -17,7 +17,6 @@ function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
     maxReps: 12,
     sets: 3,
     lastReps: 8,
-    personalBest: 10,
     sortOrder: 0,
     archived: false,
     ...overrides,
@@ -99,11 +98,6 @@ describe("parseImportText", () => {
     expect(result.exercises[0].name).toBe("Bench");
   });
 
-  it("sets personalBest equal to lastReps on import", () => {
-    const result = parseImportText(SAMPLE_TEXT);
-    if (!result.ok) throw new Error("unreachable");
-    expect(result.exercises[0].personalBest).toBe(result.exercises[0].lastReps);
-  });
 });
 
 // ─── buildExportText ──────────────────────────────────────────────────────────
@@ -226,5 +220,51 @@ describe("encodeState / decodeState", () => {
 
   it("throws on invalid / corrupt input", async () => {
     await expect(decodeState("not-valid-base64url!!")).rejects.toThrow();
+  });
+});
+
+// ─── computeSetOutcome ────────────────────────────────────────────────────────
+
+describe("computeSetOutcome", () => {
+  it("returns up when reps exceed prevReps at the same weight", () => {
+    const result = computeSetOutcome(10, 20, 8, 20);
+    expect(result.up).toBe(true);
+    expect(result.decline).toBe(false);
+  });
+
+  it("returns decline when reps are below prevReps", () => {
+    const result = computeSetOutcome(6, 20, 8, 20);
+    expect(result.decline).toBe(true);
+    expect(result.up).toBe(false);
+  });
+
+  it("returns decline when weight is below prevWeight", () => {
+    const result = computeSetOutcome(8, 15, 8, 20);
+    expect(result.decline).toBe(true);
+    expect(result.up).toBe(false);
+  });
+
+  it("returns neither when reps equal prevReps at same weight", () => {
+    const result = computeSetOutcome(8, 20, 8, 20);
+    expect(result.up).toBe(false);
+    expect(result.decline).toBe(false);
+  });
+
+  it("returns neither when prevReps is null (first log)", () => {
+    const result = computeSetOutcome(10, 20, null, 20);
+    expect(result.up).toBe(false);
+    expect(result.decline).toBe(false);
+  });
+
+  it("returns neither when prevReps is 0 (no history)", () => {
+    const result = computeSetOutcome(10, 20, 0, 20);
+    expect(result.up).toBe(false);
+    expect(result.decline).toBe(false);
+  });
+
+  it("returns decline when both reps and weight drop", () => {
+    const result = computeSetOutcome(5, 15, 8, 20);
+    expect(result.decline).toBe(true);
+    expect(result.up).toBe(false);
   });
 });

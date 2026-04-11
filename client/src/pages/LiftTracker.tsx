@@ -34,6 +34,7 @@ import {
   undoSet,
   getCategories,
   addCategory,
+  deleteCategory,
 } from "@/lib/storage";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1246,6 +1247,7 @@ export default function LiftTracker() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [droppedId, setDroppedId] = useState<number | null>(null);
+  const [confirmRemoveGroup, setConfirmRemoveGroup] = useState(false);
 
   // Sensors: long-press (500 ms hold, ≤5 px movement) activates drag
   const sensors = useSensors(
@@ -1261,6 +1263,15 @@ export default function LiftTracker() {
   const refreshCategories = useCallback(() => {
     setCategories(getCategories());
   }, []);
+
+  // Reset remove-group confirmation whenever the user switches tabs
+  useEffect(() => { setConfirmRemoveGroup(false); }, [activeTab]);
+
+  const handleRemoveCategory = () => {
+    const updated = deleteCategory(activeTab);
+    setCategories(updated);
+    setActiveTab(updated[0] ?? "");
+  };
 
   const isActive = !!activeSession && !activeSession.endedAt;
 
@@ -1489,6 +1500,35 @@ export default function LiftTracker() {
             <p style={{ fontSize: "var(--text-sm)" }}>
               {activeTab === ARCHIVE_TAB ? "No archived exercises." : `No exercises in ${activeTab} yet.`}
             </p>
+            {activeTab !== ARCHIVE_TAB && (
+              confirmRemoveGroup ? (
+                <div style={{ marginTop: "14px", display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Remove this group?</span>
+                  <button
+                    onClick={handleRemoveCategory}
+                    style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "var(--text-xs)", fontWeight: 700, color: "hsl(0 70% 60%)", background: "hsl(0 50% 15%)", border: "1px solid hsl(0 50% 30%)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
+                    data-testid="btn-remove-group-confirm"
+                  >
+                    <IconTrash /> Remove
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemoveGroup(false)}
+                    style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+                    data-testid="btn-remove-group-cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmRemoveGroup(true)}
+                  style={{ marginTop: "14px", fontSize: "var(--text-xs)", fontWeight: 600, color: "hsl(0 60% 55%)", background: "none", border: "none", cursor: "pointer" }}
+                  data-testid="btn-remove-group"
+                >
+                  Remove group
+                </button>
+              )
+            )}
           </div>
         ) : activeTab === ARCHIVE_TAB ? (
           filteredExercises.map((ex) => (

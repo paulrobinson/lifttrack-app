@@ -781,7 +781,7 @@ function AddCategoryDialog({ existingCategories, onAdd, onClose }: {
         <input
           value={name}
           onChange={(e) => { setName(e.target.value); setError(null); }}
-          placeholder="e.g. Cardio"
+          placeholder="e.g. Legs"
           data-testid="add-category-input"
           autoFocus
           onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}

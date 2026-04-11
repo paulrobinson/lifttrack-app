@@ -48,6 +48,7 @@ interface SetLog {
   repsAchieved: number;
   isPb: boolean;
   isDecline: boolean;
+  isUp: boolean;
   weight: number;
   sets: number;
 }
@@ -652,6 +653,15 @@ function IconDecline() {
   );
 }
 
+function IconUp() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7l6 6 4-4 8 8" />
+      <path d="M17 7h4v4" />
+    </svg>
+  );
+}
+
 function IconEdit() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -931,6 +941,7 @@ function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveTo
 function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void }) {
   const pbCount = logs.filter((l) => l.isPb).length;
   const declineCount = logs.filter((l) => l.isDecline).length;
+  const upCount = logs.filter((l) => l.isUp).length;
 
   return (
     <div className="summary-overlay" onClick={onClose} data-testid="summary-overlay">
@@ -939,6 +950,7 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
         <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "16px" }}>
           {logs.length} exercise{logs.length !== 1 ? "s" : ""}
           {pbCount > 0 && <span style={{ color: "var(--color-pb)" }}> · {pbCount} PB{pbCount !== 1 ? "s" : ""}</span>}
+          {upCount > 0 && <span style={{ color: "hsl(142 70% 50%)" }}> · {upCount} up</span>}
           {declineCount > 0 && <span style={{ color: "var(--color-warning)" }}> · {declineCount} down</span>}
         </p>
 
@@ -965,6 +977,11 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
                 {log.isDecline && !log.isPb && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
                     <IconDecline />
+                  </span>
+                )}
+                {log.isUp && !log.isPb && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+                    <IconUp />
                   </span>
                 )}
               </div>
@@ -999,35 +1016,38 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
   const [isPb, setIsPb] = useState(false);
   const [isDecline, setIsDecline] = useState(false);
+  const [isUp, setIsUp] = useState(false);
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const computeOutcome = (reps: number, weight: number): { pb: boolean; decline: boolean } => {
+  const computeOutcome = (reps: number, weight: number): { pb: boolean; decline: boolean; up: boolean } => {
     const prevBest = exercise.personalBest ?? 0;
     const prevReps = exercise.lastReps ?? 0;
     const prevWeight = exercise.weight;
     const pb = reps > prevBest;
     const decline = !pb && (reps < prevReps || weight < prevWeight);
-    return { pb, decline };
+    const up = !pb && !decline && prevReps > 0 && reps > prevReps;
+    return { pb, decline, up };
   };
 
   const commitLog = (reps: number, weight: number) => {
     if (!sessionId) return;
-    const { pb, decline } = computeOutcome(reps, weight);
+    const { pb, decline, up } = computeOutcome(reps, weight);
     setLoggedReps(reps);
     setIsPb(pb);
     setIsDecline(decline);
+    setIsUp(up);
     logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, isPb: pb });
     onExerciseChanged();
-    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isPb: pb, isDecline: decline, weight, sets: exercise.sets });
+    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isPb: pb, isDecline: decline, isUp: up, weight, sets: exercise.sets });
   };
 
   const handleRepTap = (reps: number) => {
     if (!isActive || !sessionId) return;
     if (loggedReps !== null) {
       // Undo
-      setLoggedReps(null); setIsPb(false); setIsDecline(false);
+      setLoggedReps(null); setIsPb(false); setIsDecline(false); setIsUp(false);
       undoSet(sessionId, exercise.id);
       onExerciseChanged();
       onSetUndone(exercise.id);
@@ -1114,6 +1134,11 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
               <IconDecline /> Down
             </span>
           )}
+          {loggedReps !== null && isUp && !isPb && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+              <IconUp /> Up
+            </span>
+          )}
 
           {loggedReps !== null && (
             <span className="done-check" data-testid="done-check">
@@ -1124,7 +1149,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
         {/* Rep bar */}
         {loggedReps !== null && isActive && showWeightPrompt === null ? (
-          <div onClick={() => { setLoggedReps(null); setIsPb(false); setIsDecline(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
+          <div onClick={() => { setLoggedReps(null); setIsPb(false); setIsDecline(false); setIsUp(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
             <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} />
             <p className="undo-hint">Tap bar to undo</p>
           </div>

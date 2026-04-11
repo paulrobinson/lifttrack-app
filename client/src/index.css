@@ -166,6 +166,24 @@
     to   { transform: scale(1);   opacity: 1; }
   }
 
+  /* ---- Drag-to-reorder jiggle ---- */
+  @keyframes jiggle {
+    0%, 100% { transform: rotate(0deg); }
+    20%      { transform: rotate(-1.5deg); }
+    60%      { transform: rotate(1.5deg); }
+  }
+
+  .exercise-jiggling {
+    animation: jiggle 0.3s ease-in-out infinite;
+    transform-origin: center top;
+    cursor: grab;
+  }
+
+  .exercise-drag-active {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+
   /* ---- Header ---- */
   .app-header {
     position: sticky;

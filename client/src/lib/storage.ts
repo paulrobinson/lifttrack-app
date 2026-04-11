@@ -152,6 +152,15 @@ export function updateExercise(id: number, data: Partial<Exercise>): Exercise {
   return updated.find((ex) => ex.id === id)!;
 }
 
+export function saveExercisesOrder(orderedIds: number[]): void {
+  const exercises = getExercises();
+  const updated = exercises.map((ex) => {
+    const newOrder = orderedIds.indexOf(ex.id);
+    return newOrder !== -1 ? { ...ex, sortOrder: newOrder } : ex;
+  });
+  save(KEYS.exercises, updated);
+}
+
 export function deleteExercise(id: number): void {
   const exercises = getExercises();
   // Only allow deleting archived exercises

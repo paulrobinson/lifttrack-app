@@ -1,5 +1,22 @@
 import { useState, useCallback, useEffect } from "react";
 import {
+  DndContext,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   type Exercise,
   type Session,
   initStorage,
@@ -9,6 +26,7 @@ import {
   createExercise,
   updateExercise,
   deleteExercise,
+  saveExercisesOrder,
   getActiveSession,
   startSession,
   endSession,
@@ -1091,6 +1109,57 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   );
 }
 
+// ─── Sortable Exercise Card Wrapper ───────────────────────────────────────────
+
+function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+  exercise: Exercise;
+  isReordering: boolean;
+  isDropped: boolean;
+  isActive: boolean;
+  sessionId: number | null;
+  onSetLogged: (log: SetLog) => void;
+  onSetUndone: (exerciseId: number) => void;
+  onExerciseChanged: () => void;
+  onTabSwitch: (cat: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
+
+  // Outer div: only handles @dnd-kit's translate transform for live reordering.
+  // The jiggle animation must NOT live here — its `transform: rotate()` would
+  // override the translate3d that @dnd-kit sets via inline style.
+  const outerStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: "relative",
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  // Inner div: safe to apply rotate-based jiggle and drop-confirm here.
+  const innerClass = isDragging
+    ? "exercise-drag-active"
+    : isDropped
+      ? "exercise-drop-confirm"
+      : isReordering
+        ? "exercise-jiggling"
+        : undefined;
+
+  return (
+    <div ref={setNodeRef} style={outerStyle} className="exercise-sortable" {...attributes} {...listeners}>
+      <div className={innerClass}>
+        <ExerciseCard
+          exercise={exercise}
+          isActive={isActive && !isReordering}
+          sessionId={sessionId}
+          onSetLogged={onSetLogged}
+          onSetUndone={onSetUndone}
+          onExerciseChanged={onExerciseChanged}
+          onTabSwitch={onTabSwitch}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function LiftTracker() {
@@ -1109,6 +1178,14 @@ export default function LiftTracker() {
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
+  const [droppedId, setDroppedId] = useState<number | null>(null);
+
+  // Sensors: long-press (500 ms hold, ≤5 px movement) activates drag
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { delay: 500, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 5 } }),
+  );
 
   // Re-read exercises from localStorage whenever something changes
   const refreshExercises = useCallback(() => {
@@ -1133,21 +1210,48 @@ export default function LiftTracker() {
   };
 
   const handleAddExercise = (data: Partial<Exercise>) => {
+    const category = data.category ?? CATEGORIES[0];
+    const catExercises = exercises.filter((ex) => ex.category === category && !ex.archived);
+    const maxSortOrder = catExercises.length > 0 ? Math.max(...catExercises.map((ex) => ex.sortOrder)) : -1;
     const ex = createExercise({
       name: data.name ?? "New Exercise",
-      category: data.category ?? CATEGORIES[0],
+      category,
       weight: data.weight ?? 0,
       maxReps: data.maxReps ?? 12,
       sets: data.sets ?? 3,
       lastReps: null,
       personalBest: null,
-      sortOrder: 0,
+      sortOrder: maxSortOrder + 1,
       archived: false,
     });
     refreshExercises();
     setActiveTab(ex.category);
     setShowAddSheet(false);
   };
+
+  const handleDragStart = useCallback((_event: DragStartEvent) => {
+    setIsReordering(true);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setIsReordering(false);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setExercises((prev) => {
+      const catItems = prev
+        .filter((ex) => ex.category === activeTab && !ex.archived)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const oldIndex = catItems.findIndex((ex) => ex.id === active.id);
+      const newIndex = catItems.findIndex((ex) => ex.id === over.id);
+      const reordered = arrayMove(catItems, oldIndex, newIndex);
+      saveExercisesOrder(reordered.map((ex) => ex.id));
+      return getExercises();
+    });
+    // Flash the dropped card green so the user can see where it landed
+    const droppedExId = active.id as number;
+    setDroppedId(droppedExId);
+    setTimeout(() => setDroppedId(null), 700);
+  }, [activeTab]);
 
   const handleSetLogged = useCallback((log: SetLog) => {
     setSetLogs((prev) => [...prev.filter((l) => l.exerciseId !== log.exerciseId), log]);
@@ -1167,9 +1271,10 @@ export default function LiftTracker() {
     activeExercises.some((ex) => ex.category === cat)
   );
 
-  const filteredExercises = activeTab === ARCHIVE_TAB
+  const filteredExercises = (activeTab === ARCHIVE_TAB
     ? archivedExercises
-    : activeExercises.filter((ex) => ex.category === activeTab);
+    : activeExercises.filter((ex) => ex.category === activeTab))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
     <div style={{ minHeight: "100dvh" }}>
@@ -1296,12 +1401,12 @@ export default function LiftTracker() {
               {activeTab === ARCHIVE_TAB ? "No archived exercises." : `No exercises in ${activeTab} yet.`}
             </p>
           </div>
-        ) : (
+        ) : activeTab === ARCHIVE_TAB ? (
           filteredExercises.map((ex) => (
             <ExerciseCard
               key={`${ex.id}-${activeSession?.id ?? "idle"}`}
               exercise={ex}
-              isActive={isActive && !ex.archived}
+              isActive={false}
               sessionId={activeSession?.id ?? null}
               onSetLogged={handleSetLogged}
               onSetUndone={handleSetUndone}
@@ -1309,6 +1414,33 @@ export default function LiftTracker() {
               onTabSwitch={setActiveTab}
             />
           ))
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredExercises.map((ex) => ex.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {filteredExercises.map((ex) => (
+                <SortableExerciseCard
+                  key={`${ex.id}-${activeSession?.id ?? "idle"}`}
+                  exercise={ex}
+                  isReordering={isReordering}
+                  isDropped={droppedId === ex.id}
+                  isActive={isActive && !ex.archived}
+                  sessionId={activeSession?.id ?? null}
+                  onSetLogged={handleSetLogged}
+                  onSetUndone={handleSetUndone}
+                  onExerciseChanged={refreshExercises}
+                  onTabSwitch={setActiveTab}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
 
         {activeTab !== ARCHIVE_TAB && (

@@ -1352,8 +1352,6 @@ export default function LiftTracker() {
 
   return (
     <div style={{ minHeight: "100dvh" }}>
-      <style>{`@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');`}</style>
-
       <header className="app-header">
         {/* Top row: logo + session counter + session button */}
         <div className="header-top">

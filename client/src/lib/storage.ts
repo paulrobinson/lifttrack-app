@@ -114,11 +114,9 @@ function buildSeeds(): Exercise[] {
   ];
 }
 
-const DEFAULT_EXERCISES: Exercise[] = buildSeeds();
-
 export function initStorage(): void {
   if (!localStorage.getItem(KEYS.exercises)) {
-    save(KEYS.exercises, DEFAULT_EXERCISES);
+    save(KEYS.exercises, buildSeeds());
   }
   if (!localStorage.getItem(KEYS.categories)) {
     localStorage.setItem(KEYS.categories, JSON.stringify(DEFAULT_CATEGORIES));

@@ -150,6 +150,15 @@ export function addCategory(name: string): string[] {
   return updated;
 }
 
+export function deleteCategory(name: string): string[] {
+  const exercises = getExercises();
+  const hasExercises = exercises.some((e) => e.category === name && !e.archived);
+  if (hasExercises) throw new Error("Cannot remove a group that still has exercises.");
+  const updated = getCategories().filter((c) => c !== name);
+  saveCategories(updated);
+  return updated;
+}
+
 /** Merge any category names found in exercises into the stored categories list. */
 export function syncCategoriesFromExercises(exercises: { category: string }[]): void {
   const current = getCategories();

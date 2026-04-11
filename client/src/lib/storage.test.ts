@@ -18,6 +18,7 @@ import {
   getCategories,
   saveCategories,
   addCategory,
+  deleteCategory,
   syncCategoriesFromExercises,
   DEFAULT_CATEGORIES,
   type Exercise,
@@ -433,6 +434,43 @@ describe("syncCategoriesFromExercises", () => {
     const before = getCategories().length;
     syncCategoriesFromExercises([{ category: "Back" }]);
     expect(getCategories().length).toBe(before);
+  });
+});
+
+describe("deleteCategory", () => {
+  it("removes the category from the stored list", () => {
+    saveCategories(["Push", "Pull", "Legs"]);
+    deleteCategory("Pull");
+    expect(getCategories()).toEqual(["Push", "Legs"]);
+  });
+
+  it("returns the updated category list", () => {
+    saveCategories(["Push", "Pull"]);
+    const result = deleteCategory("Push");
+    expect(result).toEqual(["Pull"]);
+  });
+
+  it("throws when the category has active exercises", () => {
+    initStorage();
+    addCategory("Cardio");
+    createExercise(makeExercise({ category: "Cardio" }));
+    expect(() => deleteCategory("Cardio")).toThrow();
+    expect(getCategories()).toContain("Cardio");
+  });
+
+  it("allows deletion when exercises in that category are all archived", () => {
+    initStorage();
+    addCategory("Temp");
+    const ex = createExercise(makeExercise({ category: "Temp" }));
+    updateExercise(ex.id, { archived: true });
+    expect(() => deleteCategory("Temp")).not.toThrow();
+    expect(getCategories()).not.toContain("Temp");
+  });
+
+  it("is a no-op when the category does not exist", () => {
+    saveCategories(["Push", "Pull"]);
+    deleteCategory("Nonexistent");
+    expect(getCategories()).toEqual(["Push", "Pull"]);
   });
 });
 

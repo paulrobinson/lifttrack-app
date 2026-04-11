@@ -415,3 +415,76 @@ describe("custom categories", () => {
     expect(select.value).toBe("Yoga");
   });
 });
+
+// ─── Remove group ─────────────────────────────────────────────────────────────
+
+describe("remove group", () => {
+  it("does not show the remove button on a tab that has exercises", () => {
+    renderApp();
+    // Back tab has exercises (seeded), no remove button should appear
+    expect(screen.queryByTestId("btn-remove-group")).not.toBeInTheDocument();
+  });
+
+  it("shows the remove button on an empty tab", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
+  });
+
+  it("clicking remove group shows the confirmation UI", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    expect(screen.getByTestId("btn-remove-group-confirm")).toBeInTheDocument();
+    expect(screen.getByTestId("btn-remove-group-cancel")).toBeInTheDocument();
+  });
+
+  it("clicking cancel hides the confirmation", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    await user.click(screen.getByTestId("btn-remove-group-cancel"));
+    expect(screen.queryByTestId("btn-remove-group-confirm")).not.toBeInTheDocument();
+    expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
+  });
+
+  it("confirming removes the group tab", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    await user.click(screen.getByTestId("btn-remove-group-confirm"));
+    expect(screen.queryByTestId("tab-empty")).not.toBeInTheDocument();
+    expect(getCategories()).not.toContain("Empty");
+  });
+
+  it("switching tabs resets the confirmation state", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    expect(screen.getByTestId("btn-remove-group-confirm")).toBeInTheDocument();
+    // Switch away and back
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-empty"));
+    expect(screen.queryByTestId("btn-remove-group-confirm")).not.toBeInTheDocument();
+    expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
+  });
+
+  it("does not show the remove button on the Archive tab", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Old Move" }));
+    updateExercise(ex.id, { archived: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-archive"));
+    expect(screen.queryByTestId("btn-remove-group")).not.toBeInTheDocument();
+  });
+});

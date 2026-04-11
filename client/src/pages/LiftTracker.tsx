@@ -1570,6 +1570,14 @@ export default function LiftTracker() {
         <ResetButton onReset={refreshExercises} />
       </main>
 
+      <footer className="build-footer">
+        Built {new Date(__BUILD_DATE__).toLocaleString(undefined, {
+          year: "numeric", month: "short", day: "numeric",
+          hour: "2-digit", minute: "2-digit",
+          timeZoneName: "short",
+        })}
+      </footer>
+
       {showSummary && (
         <SessionSummary logs={summaryLogs} onClose={() => setShowSummary(false)} />
       )}

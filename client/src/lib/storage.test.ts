@@ -7,6 +7,7 @@ import {
   createExercise,
   updateExercise,
   deleteExercise,
+  saveExercisesOrder,
   getSessions,
   getActiveSession,
   startSession,
@@ -306,5 +307,51 @@ describe("undoSet", () => {
     const session = startSession();
     const ex = createExercise(makeExercise());
     expect(() => undoSet(session.id, ex.id)).not.toThrow();
+  });
+});
+
+// ─── saveExercisesOrder ───────────────────────────────────────────────────────
+
+describe("saveExercisesOrder", () => {
+  it("assigns sortOrder values matching the position in the given id array", () => {
+    const a = createExercise(makeExercise({ name: "A", sortOrder: 0 }));
+    const b = createExercise(makeExercise({ name: "B", sortOrder: 1 }));
+    const c = createExercise(makeExercise({ name: "C", sortOrder: 2 }));
+
+    saveExercisesOrder([c.id, a.id, b.id]); // reverse C to front
+
+    const all = getExercises();
+    expect(all.find((e) => e.id === c.id)?.sortOrder).toBe(0);
+    expect(all.find((e) => e.id === a.id)?.sortOrder).toBe(1);
+    expect(all.find((e) => e.id === b.id)?.sortOrder).toBe(2);
+  });
+
+  it("persists the new sortOrder values to localStorage", () => {
+    const a = createExercise(makeExercise({ name: "A", sortOrder: 0 }));
+    const b = createExercise(makeExercise({ name: "B", sortOrder: 1 }));
+
+    saveExercisesOrder([b.id, a.id]);
+
+    const all = getExercises();
+    expect(all.find((e) => e.id === b.id)?.sortOrder).toBe(0);
+    expect(all.find((e) => e.id === a.id)?.sortOrder).toBe(1);
+  });
+
+  it("does not modify exercises whose id is absent from the array", () => {
+    const a = createExercise(makeExercise({ name: "A", sortOrder: 0 }));
+    const b = createExercise(makeExercise({ name: "B", sortOrder: 1 }));
+    const c = createExercise(makeExercise({ name: "C", sortOrder: 99 }));
+
+    saveExercisesOrder([a.id, b.id]); // c intentionally omitted
+
+    expect(getExercises().find((e) => e.id === c.id)?.sortOrder).toBe(99);
+  });
+
+  it("a single-element array sets that exercise's sortOrder to 0", () => {
+    const a = createExercise(makeExercise({ name: "A", sortOrder: 5 }));
+
+    saveExercisesOrder([a.id]);
+
+    expect(getExercises().find((e) => e.id === a.id)?.sortOrder).toBe(0);
   });
 });

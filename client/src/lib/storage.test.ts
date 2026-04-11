@@ -15,6 +15,11 @@ import {
   getSessionSets,
   logSet,
   undoSet,
+  getCategories,
+  saveCategories,
+  addCategory,
+  syncCategoriesFromExercises,
+  DEFAULT_CATEGORIES,
   type Exercise,
 } from "./storage";
 
@@ -353,5 +358,97 @@ describe("saveExercisesOrder", () => {
     saveExercisesOrder([a.id]);
 
     expect(getExercises().find((e) => e.id === a.id)?.sortOrder).toBe(0);
+  });
+});
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+describe("getCategories", () => {
+  it("returns the default categories before initStorage is called", () => {
+    const cats = getCategories();
+    expect(cats).toEqual(DEFAULT_CATEGORIES);
+  });
+
+  it("returns the default categories after initStorage seeds them", () => {
+    initStorage();
+    const cats = getCategories();
+    expect(cats).toEqual(DEFAULT_CATEGORIES);
+  });
+
+  it("does not overwrite saved categories on second initStorage call", () => {
+    initStorage();
+    addCategory("Cardio");
+    initStorage(); // second call should be a no-op for categories
+    const cats = getCategories();
+    expect(cats).toContain("Cardio");
+  });
+});
+
+describe("saveCategories", () => {
+  it("persists a custom list and getCategories returns it", () => {
+    saveCategories(["Yoga", "Pilates"]);
+    expect(getCategories()).toEqual(["Yoga", "Pilates"]);
+  });
+});
+
+describe("addCategory", () => {
+  it("appends a new category and returns the updated list", () => {
+    initStorage();
+    const updated = addCategory("Cardio");
+    expect(updated).toContain("Cardio");
+    expect(getCategories()).toContain("Cardio");
+  });
+
+  it("does not add a duplicate (case-insensitive)", () => {
+    initStorage();
+    addCategory("Cardio");
+    const result = addCategory("cardio");
+    const count = result.filter((c) => c.toLowerCase() === "cardio").length;
+    expect(count).toBe(1);
+  });
+
+  it("ignores whitespace-only names", () => {
+    initStorage();
+    const before = getCategories().length;
+    addCategory("   ");
+    expect(getCategories().length).toBe(before);
+  });
+
+  it("trims leading/trailing whitespace from the name", () => {
+    initStorage();
+    addCategory("  Stretching  ");
+    expect(getCategories()).toContain("Stretching");
+  });
+});
+
+describe("syncCategoriesFromExercises", () => {
+  it("adds category names from exercises that are not already stored", () => {
+    initStorage();
+    syncCategoriesFromExercises([{ category: "Mobility" }]);
+    expect(getCategories()).toContain("Mobility");
+  });
+
+  it("does not create duplicates for existing categories", () => {
+    initStorage();
+    const before = getCategories().length;
+    syncCategoriesFromExercises([{ category: "Back" }]);
+    expect(getCategories().length).toBe(before);
+  });
+});
+
+describe("replaceExercises syncs categories", () => {
+  it("adds any new category names found in the imported exercises", () => {
+    initStorage();
+    replaceExercises([
+      makeExercise({ category: "Aquatics" }),
+    ]);
+    expect(getCategories()).toContain("Aquatics");
+  });
+
+  it("does not duplicate existing categories", () => {
+    initStorage();
+    replaceExercises([makeExercise({ category: "Back" })]);
+    const count = getCategories().filter((c) => c === "Back").length;
+    expect(count).toBe(1);
   });
 });

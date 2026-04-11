@@ -34,7 +34,6 @@ function makeExercise(overrides: Partial<Omit<Exercise, "id">> = {}): Omit<Exerc
     maxReps: 12,
     sets: 3,
     lastReps: 8,
-    personalBest: 10,
     sortOrder: 0,
     archived: false,
     ...overrides,
@@ -220,8 +219,8 @@ describe("endSession", () => {
 describe("logSet", () => {
   it("creates a SessionSet record with correct fields", () => {
     const session = startSession();
-    const ex = createExercise(makeExercise({ lastReps: 8, personalBest: 10 }));
-    const set = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, isPb: false });
+    const ex = createExercise(makeExercise({ lastReps: 8 }));
+    const set = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9 });
     expect(set.sessionId).toBe(session.id);
     expect(set.exerciseId).toBe(ex.id);
     expect(set.repsAchieved).toBe(9);
@@ -231,39 +230,22 @@ describe("logSet", () => {
   it("updates exercise.lastReps to the logged value", () => {
     const session = startSession();
     const ex = createExercise(makeExercise({ lastReps: 8 }));
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10, isPb: false });
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
     const updated = getExercises().find((e) => e.id === ex.id);
     expect(updated?.lastReps).toBe(10);
   });
 
-  it("updates exercise.personalBest when isPb is true", () => {
+  it("snapshots prevLastReps before mutating", () => {
     const session = startSession();
-    const ex = createExercise(makeExercise({ lastReps: 8, personalBest: 8 }));
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 12, isPb: true });
-    const updated = getExercises().find((e) => e.id === ex.id);
-    expect(updated?.personalBest).toBe(12);
-  });
-
-  it("does not change exercise.personalBest when isPb is false", () => {
-    const session = startSession();
-    const ex = createExercise(makeExercise({ lastReps: 10, personalBest: 10 }));
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, isPb: false });
-    const updated = getExercises().find((e) => e.id === ex.id);
-    expect(updated?.personalBest).toBe(10);
-  });
-
-  it("snapshots prevLastReps and prevPersonalBest before mutating", () => {
-    const session = startSession();
-    const ex = createExercise(makeExercise({ lastReps: 7, personalBest: 9 }));
-    const set = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 11, isPb: true });
+    const ex = createExercise(makeExercise({ lastReps: 7 }));
+    const set = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 11 });
     expect(set.prevLastReps).toBe(7);
-    expect(set.prevPersonalBest).toBe(9);
   });
 
   it("getSessionSets returns the logged set for the correct session", () => {
     const session = startSession();
     const ex = createExercise(makeExercise());
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, isPb: false });
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
     const sets = getSessionSets(session.id);
     expect(sets.length).toBe(1);
     expect(sets[0].exerciseId).toBe(ex.id);
@@ -273,7 +255,7 @@ describe("logSet", () => {
     const s1 = startSession();
     const s2 = startSession();
     const ex = createExercise(makeExercise());
-    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, isPb: false });
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
     expect(getSessionSets(s2.id).length).toBe(0);
   });
 });
@@ -284,26 +266,25 @@ describe("undoSet", () => {
   it("removes the most recent set for the exercise", () => {
     const session = startSession();
     const ex = createExercise(makeExercise());
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, isPb: false });
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
     undoSet(session.id, ex.id);
     expect(getSessionSets(session.id).length).toBe(0);
   });
 
-  it("restores exercise.lastReps and exercise.personalBest to pre-set values", () => {
+  it("restores exercise.lastReps to its pre-set value", () => {
     const session = startSession();
-    const ex = createExercise(makeExercise({ lastReps: 7, personalBest: 7 }));
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 12, isPb: true });
+    const ex = createExercise(makeExercise({ lastReps: 7 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 12 });
     undoSet(session.id, ex.id);
     const restored = getExercises().find((e) => e.id === ex.id);
     expect(restored?.lastReps).toBe(7);
-    expect(restored?.personalBest).toBe(7);
   });
 
   it("only removes the most recent set when multiple sets exist", () => {
     const session = startSession();
     const ex = createExercise(makeExercise({ lastReps: 5 }));
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 6, isPb: false });
-    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, isPb: false });
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 6 });
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
     undoSet(session.id, ex.id);
     expect(getSessionSets(session.id).length).toBe(1);
     expect(getSessionSets(session.id)[0].repsAchieved).toBe(6);

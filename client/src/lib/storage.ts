@@ -9,7 +9,6 @@ export interface Exercise {
   maxReps: number;
   sets: number;
   lastReps: number | null;
-  personalBest: number | null;
   sortOrder: number;
   archived: boolean;
 }
@@ -26,9 +25,7 @@ export interface SessionSet {
   exerciseId: number;
   weight: number;
   repsAchieved: number;
-  isPb: boolean;
   prevLastReps: number | null;
-  prevPersonalBest: number | null;
 }
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
@@ -73,7 +70,6 @@ function buildSeeds(): Exercise[] {
     id: nextId(),
     name, category, weight, maxReps, sets,
     lastReps,
-    personalBest: lastReps,
     sortOrder: order++,
     archived: false,
   });
@@ -262,25 +258,17 @@ export function logSet(params: {
   exerciseId: number;
   weight: number;
   repsAchieved: number;
-  isPb: boolean;
 }): SessionSet {
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
 
-  // Snapshot current state before mutating
   const set: SessionSet = {
     id: nextId(),
     ...params,
     prevLastReps: ex.lastReps,
-    prevPersonalBest: ex.personalBest,
   };
 
-  // Update exercise with new lastReps / personalBest
-  const newPb = params.isPb ? params.repsAchieved : ex.personalBest;
-  updateExercise(params.exerciseId, {
-    lastReps: params.repsAchieved,
-    personalBest: newPb,
-  });
+  updateExercise(params.exerciseId, { lastReps: params.repsAchieved });
 
   const sets = load<SessionSet>(KEYS.sessionSets);
   save(KEYS.sessionSets, [...sets, set]);
@@ -298,10 +286,7 @@ export function undoSet(sessionId: number, exerciseId: number): void {
   const set = sets[realIdx];
 
   // Restore exercise to its pre-set state
-  updateExercise(exerciseId, {
-    lastReps: set.prevLastReps,
-    personalBest: set.prevPersonalBest,
-  });
+  updateExercise(exerciseId, { lastReps: set.prevLastReps });
 
   save(KEYS.sessionSets, sets.filter((_, i) => i !== realIdx));
 }

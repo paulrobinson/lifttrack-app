@@ -47,8 +47,8 @@ interface SetLog {
   exerciseId: number;
   exerciseName: string;
   repsAchieved: number;
-  isPb: boolean;
   isDecline: boolean;
+  isUp: boolean;
   weight: number;
   sets: number;
 }
@@ -66,6 +66,18 @@ interface ParseError {
 type ParseResult =
   | { ok: true; exercises: ParsedExercise[] }
   | { ok: false; error: ParseError };
+
+export function computeSetOutcome(
+  reps: number,
+  weight: number,
+  prevReps: number | null,
+  prevWeight: number,
+): { decline: boolean; up: boolean } {
+  const prev = prevReps ?? 0;
+  const decline = reps < prev || weight < prevWeight;
+  const up = !decline && prev > 0 && reps > prev;
+  return { decline, up };
+}
 
 export function parseImportText(text: string): ParseResult {
   const raw = text.split("\n");
@@ -150,7 +162,6 @@ export function parseImportText(text: string): ParseResult {
       maxReps,
       sets,
       lastReps,
-      personalBest: lastReps,
       sortOrder: sortOrder++,
       archived: false,
     });
@@ -633,22 +644,21 @@ function IconCheck() {
   );
 }
 
-function IconTrophy() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2" />
-      <path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2" />
-      <path d="M6 3h12v10a6 6 0 0 1-12 0Z" />
-      <path d="M12 19v3" /><path d="M8 22h8" />
-    </svg>
-  );
-}
 
 function IconDecline() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 17l6-6 4 4 8-8" />
       <path d="M17 17h4V13" />
+    </svg>
+  );
+}
+
+function IconUp() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7l6 6 4-4 8 8" />
+      <path d="M17 7h4v4" />
     </svg>
   );
 }
@@ -930,8 +940,8 @@ function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveTo
 // ─── Session Summary ──────────────────────────────────────────────────────────
 
 function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void }) {
-  const pbCount = logs.filter((l) => l.isPb).length;
   const declineCount = logs.filter((l) => l.isDecline).length;
+  const upCount = logs.filter((l) => l.isUp).length;
 
   return (
     <div className="summary-overlay" onClick={onClose} data-testid="summary-overlay">
@@ -939,7 +949,7 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
         <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700, marginBottom: "4px" }}>Session Complete</h3>
         <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", marginBottom: "16px" }}>
           {logs.length} exercise{logs.length !== 1 ? "s" : ""}
-          {pbCount > 0 && <span style={{ color: "var(--color-pb)" }}> · {pbCount} PB{pbCount !== 1 ? "s" : ""}</span>}
+          {upCount > 0 && <span style={{ color: "hsl(142 70% 50%)" }}> · {upCount} up</span>}
           {declineCount > 0 && <span style={{ color: "var(--color-warning)" }}> · {declineCount} down</span>}
         </p>
 
@@ -958,14 +968,14 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
                 <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
                   {log.weight}kg × {log.repsAchieved}
                 </span>
-                {log.isPb && (
-                  <span className="pb-badge">
-                    <IconTrophy /> PB
-                  </span>
-                )}
-                {log.isDecline && !log.isPb && (
+                {log.isDecline && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
                     <IconDecline />
+                  </span>
+                )}
+                {log.isUp && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+                    <IconUp />
                   </span>
                 )}
               </div>
@@ -998,37 +1008,31 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onTabSwitch: (cat: string) => void;
 }) {
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
-  const [isPb, setIsPb] = useState(false);
   const [isDecline, setIsDecline] = useState(false);
+  const [isUp, setIsUp] = useState(false);
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const computeOutcome = (reps: number, weight: number): { pb: boolean; decline: boolean } => {
-    const prevBest = exercise.personalBest ?? 0;
-    const prevReps = exercise.lastReps ?? 0;
-    const prevWeight = exercise.weight;
-    const pb = reps > prevBest;
-    const decline = !pb && (reps < prevReps || weight < prevWeight);
-    return { pb, decline };
-  };
+  const computeOutcome = (reps: number, weight: number) =>
+    computeSetOutcome(reps, weight, exercise.lastReps, exercise.weight);
 
   const commitLog = (reps: number, weight: number) => {
     if (!sessionId) return;
-    const { pb, decline } = computeOutcome(reps, weight);
+    const { decline, up } = computeOutcome(reps, weight);
     setLoggedReps(reps);
-    setIsPb(pb);
     setIsDecline(decline);
-    logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, isPb: pb });
+    setIsUp(up);
+    logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
     onExerciseChanged();
-    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isPb: pb, isDecline: decline, weight, sets: exercise.sets });
+    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets });
   };
 
   const handleRepTap = (reps: number) => {
     if (!isActive || !sessionId) return;
     if (loggedReps !== null) {
       // Undo
-      setLoggedReps(null); setIsPb(false); setIsDecline(false);
+      setLoggedReps(null); setIsDecline(false); setIsUp(false);
       undoSet(sessionId, exercise.id);
       onExerciseChanged();
       onSetUndone(exercise.id);
@@ -1048,9 +1052,9 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     if (showWeightPrompt === "increase") {
       // loggedReps already flashed green; commit the actual log then update weight
       commitLog(pendingReps!, exercise.weight);
-      updateExercise(exercise.id, { weight: newWeight, lastReps: null, personalBest: null });
+      updateExercise(exercise.id, { weight: newWeight, lastReps: null });
     } else {
-      updateExercise(exercise.id, { weight: newWeight, lastReps: null, personalBest: null });
+      updateExercise(exercise.id, { weight: newWeight, lastReps: null });
     }
     onExerciseChanged();
     setPendingReps(null);
@@ -1089,7 +1093,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
           </button>
         </div>
 
-        {/* Row 2: weight · reps  |  Lower btn  |  PB/Decline  |  Tick */}
+        {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
             <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}kg</strong>
@@ -1105,14 +1109,14 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
             </button>
           )}
 
-          {loggedReps !== null && isPb && (
-            <span className="pb-badge">
-              <IconTrophy /> PB
-            </span>
-          )}
-          {loggedReps !== null && isDecline && !isPb && (
+          {loggedReps !== null && isDecline && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
               <IconDecline /> Down
+            </span>
+          )}
+          {loggedReps !== null && isUp && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+              <IconUp /> Up
             </span>
           )}
 
@@ -1125,7 +1129,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
         {/* Rep bar */}
         {loggedReps !== null && isActive && showWeightPrompt === null ? (
-          <div onClick={() => { setLoggedReps(null); setIsPb(false); setIsDecline(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
+          <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
             <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} />
             <p className="undo-hint">Tap bar to undo</p>
           </div>
@@ -1143,7 +1147,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         )}
 
         {loggedReps === exercise.maxReps && (
-          <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-pb)", fontWeight: 600 }}>
+          <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
             Max reps hit — weight updated for next session
           </p>
         )}
@@ -1301,7 +1305,6 @@ export default function LiftTracker() {
       maxReps: data.maxReps ?? 12,
       sets: data.sets ?? 3,
       lastReps: null,
-      personalBest: null,
       sortOrder: maxSortOrder + 1,
       archived: false,
     });
@@ -1343,7 +1346,6 @@ export default function LiftTracker() {
   }, []);
 
   const doneCount = setLogs.length;
-  const pbCount = setLogs.filter((l) => l.isPb).length;
 
   const activeExercises = exercises.filter((ex) => !ex.archived);
   const archivedExercises = exercises.filter((ex) => ex.archived);
@@ -1430,9 +1432,6 @@ export default function LiftTracker() {
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
                 {doneCount}
-                {pbCount > 0 && (
-                  <span style={{ marginLeft: "2px", fontSize: "10px" }}>· 🏆{pbCount}</span>
-                )}
               </span>
             )}
 

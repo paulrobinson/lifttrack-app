@@ -14,7 +14,6 @@ function makeExercise(overrides = {}) {
     maxReps: 12,
     sets: 3,
     lastReps: 8,
-    personalBest: 8,
     sortOrder: 0,
     archived: false,
     ...overrides,

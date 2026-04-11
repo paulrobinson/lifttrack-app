@@ -157,6 +157,41 @@ describe("buildExportText", () => {
   });
 });
 
+// ─── custom category names in import/export ───────────────────────────────────
+
+describe("parseImportText with custom category names", () => {
+  it("accepts any string as a category header", () => {
+    const text = `Aquatics\n—————\nExercise : Swimming Laps\nMax reps : 10\nWeight : 0\nSets : 4\nReps : 8\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].category).toBe("Aquatics");
+  });
+
+  it("handles multi-word custom category names", () => {
+    const text = `High Intensity\n—————\nExercise : Burpees\nMax reps : 20\nWeight : 0\nSets : 3\nReps : 15\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].category).toBe("High Intensity");
+  });
+
+  it("round-trips custom category names through buildExportText → parseImportText", () => {
+    const exercises: import("@/lib/storage").Exercise[] = [
+      makeExercise({ id: 1, name: "Swimming Laps", category: "Aquatics", weight: 0, maxReps: 10, sets: 4, lastReps: 8 }),
+      makeExercise({ id: 2, name: "Yoga Flow",    category: "Mindfulness", weight: 0, maxReps: 5, sets: 1, lastReps: 5 }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).toContain("Aquatics");
+    expect(text).toContain("Mindfulness");
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].category).toBe("Aquatics");
+    expect(result.exercises[1].category).toBe("Mindfulness");
+  });
+});
+
 // ─── encodeState / decodeState ────────────────────────────────────────────────
 
 describe("encodeState / decodeState", () => {

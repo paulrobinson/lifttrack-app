@@ -32,12 +32,12 @@ import {
   endSession,
   logSet,
   undoSet,
+  getCategories,
+  addCategory,
 } from "@/lib/storage";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const CATEGORIES = ["Back", "Chest", "Upper", "Legs"] as const;
-type Category = typeof CATEGORIES[number];
 const ARCHIVE_TAB = "Archive";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -750,10 +750,70 @@ function WeightPrompt({ label, onConfirm, onCancel }: {
   );
 }
 
+// ─── Add Category Dialog ──────────────────────────────────────────────────────
+
+function AddCategoryDialog({ existingCategories, onAdd, onClose }: {
+  existingCategories: string[];
+  onAdd: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAdd = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Please enter a category name.");
+      return;
+    }
+    if (existingCategories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      setError("A category with that name already exists.");
+      return;
+    }
+    onAdd(trimmed);
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <p style={{ fontWeight: 700, fontSize: "var(--text-base)", marginBottom: "16px" }}>Add Category</p>
+      <div className="edit-field" style={{ marginBottom: "8px" }}>
+        <label>Name</label>
+        <input
+          value={name}
+          onChange={(e) => { setName(e.target.value); setError(null); }}
+          placeholder="e.g. Cardio"
+          data-testid="add-category-input"
+          autoFocus
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+        />
+      </div>
+      {error && (
+        <p style={{ fontSize: "var(--text-xs)", color: "hsl(0 70% 60%)", marginBottom: "12px" }} data-testid="add-category-error">
+          {error}
+        </p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+        <button
+          className="btn-confirm"
+          onClick={handleAdd}
+          style={{ width: "100%", padding: "12px" }}
+          data-testid="add-category-confirm"
+        >
+          Add Category
+        </button>
+        <button onClick={onClose} style={cancelBtnStyle} data-testid="add-category-cancel">
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Edit / Add Sheet ─────────────────────────────────────────────────────────
 
-function ExerciseSheet({ exercise, onSave, onClose, onArchiveToggle, onDelete, onTabSwitch }: {
+function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveToggle, onDelete, onTabSwitch }: {
   exercise?: Exercise;
+  defaultCategory?: string;
   onSave: (data: Partial<Exercise>) => void;
   onClose: () => void;
   onArchiveToggle?: () => void;
@@ -761,11 +821,12 @@ function ExerciseSheet({ exercise, onSave, onClose, onArchiveToggle, onDelete, o
   onTabSwitch?: (cat: string) => void;
 }) {
   const isNew = !exercise;
+  const sheetCategories = getCategories();
   const [name, setName] = useState(exercise?.name ?? "");
   const [weight, setWeight] = useState(String(exercise?.weight ?? ""));
   const [maxReps, setMaxReps] = useState(String(exercise?.maxReps ?? "12"));
   const [sets, setSets] = useState(String(exercise?.sets ?? "3"));
-  const [category, setCategory] = useState<string>(exercise?.category ?? CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(exercise?.category ?? defaultCategory ?? sheetCategories[0] ?? "Back");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
@@ -810,7 +871,7 @@ function ExerciseSheet({ exercise, onSave, onClose, onArchiveToggle, onDelete, o
           <div className="edit-field">
             <label>Group</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} data-testid="edit-category">
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {sheetCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         </div>
@@ -1170,12 +1231,17 @@ export default function LiftTracker() {
     initStorage();
     return getExercises();
   });
+  const [categories, setCategories] = useState<string[]>(() => {
+    initStorage();
+    return getCategories();
+  });
   const [activeSession, setActiveSession] = useState<Session | null>(() => getActiveSession());
   const [setLogs, setSetLogs] = useState<SetLog[]>([]);
-  const [activeTab, setActiveTab] = useState<string>(CATEGORIES[0]);
+  const [activeTab, setActiveTab] = useState<string>(() => getCategories()[0] ?? "Back");
   const [showSummary, setShowSummary] = useState(false);
   const [summaryLogs, setSummaryLogs] = useState<SetLog[]>([]);
   const [showAddSheet, setShowAddSheet] = useState(false);
+  const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -1190,6 +1256,10 @@ export default function LiftTracker() {
   // Re-read exercises from localStorage whenever something changes
   const refreshExercises = useCallback(() => {
     setExercises(getExercises());
+  }, []);
+
+  const refreshCategories = useCallback(() => {
+    setCategories(getCategories());
   }, []);
 
   const isActive = !!activeSession && !activeSession.endedAt;
@@ -1210,7 +1280,7 @@ export default function LiftTracker() {
   };
 
   const handleAddExercise = (data: Partial<Exercise>) => {
-    const category = data.category ?? CATEGORIES[0];
+    const category = data.category ?? categories[0] ?? "Back";
     const catExercises = exercises.filter((ex) => ex.category === category && !ex.archived);
     const maxSortOrder = catExercises.length > 0 ? Math.max(...catExercises.map((ex) => ex.sortOrder)) : -1;
     const ex = createExercise({
@@ -1267,9 +1337,13 @@ export default function LiftTracker() {
   const activeExercises = exercises.filter((ex) => !ex.archived);
   const archivedExercises = exercises.filter((ex) => ex.archived);
 
-  const categoriesWithExercises = CATEGORIES.filter((cat) =>
-    activeExercises.some((ex) => ex.category === cat)
-  );
+  // All stored categories, plus any extra ones found in exercises (e.g. after import)
+  const allCategories = [...categories];
+  activeExercises.forEach((ex) => {
+    if (!allCategories.some((c) => c.toLowerCase() === ex.category.toLowerCase())) {
+      allCategories.push(ex.category);
+    }
+  });
 
   const filteredExercises = (activeTab === ARCHIVE_TAB
     ? archivedExercises
@@ -1369,7 +1443,7 @@ export default function LiftTracker() {
 
         {/* Tab bar */}
         <div className="tab-bar" data-testid="tab-bar">
-          {categoriesWithExercises.map((cat) => (
+          {allCategories.map((cat) => (
             <button
               key={cat}
               className={`tab-btn ${activeTab === cat ? "active-tab" : ""}`}
@@ -1379,6 +1453,23 @@ export default function LiftTracker() {
               {cat}
             </button>
           ))}
+          <button
+            onClick={() => setShowAddCategoryDialog(true)}
+            data-testid="btn-add-category"
+            title="Add category"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: "28px", height: "28px", flexShrink: 0,
+              background: "none", border: "1px solid var(--color-border)",
+              borderRadius: "8px", cursor: "pointer",
+              color: "var(--color-text-muted)", fontSize: "18px", lineHeight: 1,
+              transition: "color 150ms ease, border-color 150ms ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-success)"; e.currentTarget.style.borderColor = "var(--color-success)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-muted)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
+          >
+            +
+          </button>
           <div style={{ flex: 1 }} />
           {archivedExercises.length > 0 && (
             <button
@@ -1477,7 +1568,7 @@ export default function LiftTracker() {
           </p>
         )}
 
-        <ImportButton onImport={refreshExercises} />
+        <ImportButton onImport={() => { refreshExercises(); refreshCategories(); }} />
         <ResetButton onReset={refreshExercises} />
       </main>
 
@@ -1517,8 +1608,22 @@ export default function LiftTracker() {
         </Modal>
       )}
 
+      {showAddCategoryDialog && (
+        <AddCategoryDialog
+          existingCategories={categories}
+          onAdd={(name) => {
+            const updated = addCategory(name);
+            setCategories(updated);
+            setActiveTab(name);
+            setShowAddCategoryDialog(false);
+          }}
+          onClose={() => setShowAddCategoryDialog(false)}
+        />
+      )}
+
       {showAddSheet && (
         <ExerciseSheet
+          defaultCategory={activeTab !== ARCHIVE_TAB ? activeTab : undefined}
           onSave={handleAddExercise}
           onClose={() => setShowAddSheet(false)}
         />

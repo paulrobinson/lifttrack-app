@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -308,5 +308,110 @@ describe("exercise ordering", () => {
     await user.click(screen.getByTestId("tab-archive"));
     // Archived exercises render via plain ExerciseCard without the sortable wrapper
     expect(document.querySelector(".exercise-sortable")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Custom categories ────────────────────────────────────────────────────────
+
+describe("custom categories", () => {
+  it("renders the add-category '+' button in the tab bar", () => {
+    renderApp();
+    expect(screen.getByTestId("btn-add-category")).toBeInTheDocument();
+  });
+
+  it("clicking '+' opens the add-category dialog", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    expect(screen.getByTestId("add-category-input")).toBeInTheDocument();
+  });
+
+  it("cancel button closes the dialog without adding a category", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.click(screen.getByTestId("add-category-cancel"));
+    expect(screen.queryByTestId("add-category-input")).not.toBeInTheDocument();
+  });
+
+  it("submitting a new category name adds a tab and persists it", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "Cardio");
+    await user.click(screen.getByTestId("add-category-confirm"));
+    // Dialog closes
+    expect(screen.queryByTestId("add-category-input")).not.toBeInTheDocument();
+    // New tab is visible
+    expect(screen.getByTestId("tab-cardio")).toBeInTheDocument();
+    // Persisted in storage
+    expect(getCategories()).toContain("Cardio");
+  });
+
+  it("pressing Enter in the input confirms the dialog", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "Mobility{Enter}");
+    expect(screen.queryByTestId("add-category-input")).not.toBeInTheDocument();
+    expect(screen.getByTestId("tab-mobility")).toBeInTheDocument();
+  });
+
+  it("shows an error when the name is empty", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.click(screen.getByTestId("add-category-confirm"));
+    expect(screen.getByTestId("add-category-error")).toBeInTheDocument();
+  });
+
+  it("shows an error when the category already exists (case-insensitive)", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "back");
+    await user.click(screen.getByTestId("add-category-confirm"));
+    expect(screen.getByTestId("add-category-error")).toBeInTheDocument();
+  });
+
+  it("the exercise edit sheet shows custom categories in the group dropdown", async () => {
+    const user = userEvent.setup();
+    // Pre-seed a custom category
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Aquatics"]);
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-edit"));
+    const select = screen.getByTestId("edit-category") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.value);
+    expect(options).toContain("Aquatics");
+  });
+
+  it("pre-existing custom category tabs appear when the app starts", () => {
+    saveCategories(["Back", "Chest", "Upper", "Legs", "CrossFit"]);
+    createExercise(makeExercise({ name: "Box Jump", category: "CrossFit" }));
+    renderApp();
+    expect(screen.getByTestId("tab-crossfit")).toBeInTheDocument();
+  });
+
+  it("navigating to a new category tab shows the empty-state message", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Back", "Chest", "Upper", "Legs", "Stretching"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-stretching"));
+    expect(screen.getByText(/No exercises in Stretching yet/)).toBeInTheDocument();
+  });
+
+  it("after adding a category, new exercise defaults to that category in the sheet", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    // Add "Yoga" category
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "Yoga");
+    await user.click(screen.getByTestId("add-category-confirm"));
+    // Now open the add exercise sheet (we should be on the Yoga tab)
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    const select = screen.getByTestId("edit-category") as HTMLSelectElement;
+    // Yoga tab should be selected and available
+    expect(select.value).toBe("Yoga");
   });
 });

@@ -38,7 +38,10 @@ const KEYS = {
   sessions: "lt_sessions",
   sessionSets: "lt_session_sets",
   nextId: "lt_next_id",
+  categories: "lt_categories",
 } as const;
+
+export const DEFAULT_CATEGORIES = ["Back", "Chest", "Upper", "Legs"];
 
 // ─── ID generator ────────────────────────────────────────────────────────────
 
@@ -117,6 +120,48 @@ export function initStorage(): void {
   if (!localStorage.getItem(KEYS.exercises)) {
     save(KEYS.exercises, DEFAULT_EXERCISES);
   }
+  if (!localStorage.getItem(KEYS.categories)) {
+    localStorage.setItem(KEYS.categories, JSON.stringify(DEFAULT_CATEGORIES));
+  }
+}
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+export function getCategories(): string[] {
+  try {
+    const stored = localStorage.getItem(KEYS.categories);
+    if (!stored) return [...DEFAULT_CATEGORIES];
+    return JSON.parse(stored) as string[];
+  } catch {
+    return [...DEFAULT_CATEGORIES];
+  }
+}
+
+export function saveCategories(categories: string[]): void {
+  localStorage.setItem(KEYS.categories, JSON.stringify(categories));
+}
+
+export function addCategory(name: string): string[] {
+  const trimmed = name.trim();
+  const categories = getCategories();
+  if (!trimmed || categories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+    return categories;
+  }
+  const updated = [...categories, trimmed];
+  saveCategories(updated);
+  return updated;
+}
+
+/** Merge any category names found in exercises into the stored categories list. */
+export function syncCategoriesFromExercises(exercises: { category: string }[]): void {
+  const current = getCategories();
+  const incoming = exercises.map((e) => e.category).filter(Boolean);
+  const newCats = incoming.filter(
+    (c) => !current.some((existing) => existing.toLowerCase() === c.toLowerCase())
+  );
+  if (newCats.length > 0) {
+    saveCategories([...current, ...newCats]);
+  }
 }
 
 export function resetExercises(): void {
@@ -130,6 +175,7 @@ export function replaceExercises(exercises: Omit<Exercise, "id">[]): void {
   localStorage.removeItem(KEYS.exercises);
   const withIds = exercises.map((ex) => ({ ...ex, id: nextId() }));
   save(KEYS.exercises, withIds);
+  syncCategoriesFromExercises(exercises);
 }
 
 // ─── Exercises ───────────────────────────────────────────────────────────────

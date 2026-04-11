@@ -1144,7 +1144,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
         : undefined;
 
   return (
-    <div ref={setNodeRef} style={outerStyle} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={outerStyle} className="exercise-sortable" {...attributes} {...listeners}>
       <div className={innerClass}>
         <ExerciseCard
           exercise={exercise}

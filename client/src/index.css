@@ -166,6 +166,14 @@
     to   { transform: scale(1);   opacity: 1; }
   }
 
+  /* ---- Sortable card wrapper ---- */
+  /* Prevent iOS text selection, magnifier, and copy callout on long press */
+  .exercise-sortable {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   /* ---- Drag-to-reorder jiggle ---- */
   @keyframes jiggle {
     0%, 100% { transform: rotate(0deg); }

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -230,5 +230,83 @@ describe("export modal", () => {
     await user.click(screen.getByTestId("btn-export"));
     expect(screen.getByText(/download as file/i)).toBeInTheDocument();
     expect(screen.getByText(/copy transfer code/i)).toBeInTheDocument();
+  });
+});
+
+// ─── Exercise ordering / drag-to-reorder ─────────────────────────────────────
+
+describe("exercise ordering", () => {
+  it("renders exercises sorted by sortOrder within a category", () => {
+    // Create exercises out of insertion order — the UI must sort by sortOrder
+    createExercise(makeExercise({ name: "Second", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Third",  sortOrder: 2 }));
+    createExercise(makeExercise({ name: "First",  sortOrder: 0 }));
+    renderApp();
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[0]).toBe("First");
+    expect(names[1]).toBe("Second");
+    expect(names[2]).toBe("Third");
+  });
+
+  it("a new exercise receives a sortOrder one above the current max for its category", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Existing A", category: "Back", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Existing B", category: "Back", sortOrder: 1 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Newcomer");
+    await user.click(screen.getByTestId("edit-save"));
+
+    const newcomer = getExercises().find((e) => e.name === "Newcomer");
+    expect(newcomer?.sortOrder).toBe(2);
+  });
+
+  it("a new exercise appears last in the rendered list for its category", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Alpha", category: "Back", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Beta",  category: "Back", sortOrder: 1 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Omega");
+    await user.click(screen.getByTestId("edit-save"));
+
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[names.length - 1]).toBe("Omega");
+  });
+
+  it("after saveExercisesOrder the component reflects the new display order", () => {
+    const a = createExercise(makeExercise({ name: "Alpha", sortOrder: 0 }));
+    const b = createExercise(makeExercise({ name: "Beta",  sortOrder: 1 }));
+    const c = createExercise(makeExercise({ name: "Gamma", sortOrder: 2 }));
+
+    // Move Gamma to position 0 before the component ever mounts
+    saveExercisesOrder([c.id, a.id, b.id]);
+
+    renderApp();
+
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[0]).toBe("Gamma");
+    expect(names[1]).toBe("Alpha");
+    expect(names[2]).toBe("Beta");
+  });
+
+  it("exercise cards are wrapped in the no-select sortable class (prevents iOS text callout)", () => {
+    createExercise(makeExercise());
+    renderApp();
+    expect(document.querySelector(".exercise-sortable")).toBeInTheDocument();
+  });
+
+  it("archive tab exercises are not wrapped in the sortable class", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Old Move" }));
+    updateExercise(ex.id, { archived: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-archive"));
+    // Archived exercises render via plain ExerciseCard without the sortable wrapper
+    expect(document.querySelector(".exercise-sortable")).not.toBeInTheDocument();
   });
 });

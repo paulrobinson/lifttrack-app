@@ -188,9 +188,9 @@
 
   /* Drop confirmation: brief green border pulse */
   @keyframes drop-settle {
-    0%   { box-shadow: 0 0 0 0px color-mix(in srgb, var(--color-success) 80%, transparent); }
-    35%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 50%, transparent); }
-    100% { box-shadow: 0 0 0 0px transparent; }
+    0%   { box-shadow: 0 0 0 0px rgba(52, 199, 89, 0); }
+    35%  { box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.5); }
+    100% { box-shadow: 0 0 0 0px rgba(52, 199, 89, 0); }
   }
 
   .exercise-drop-confirm {

@@ -173,6 +173,8 @@
     60%      { transform: rotate(1.5deg); }
   }
 
+  /* Inner wrapper: jiggle animation lives here, separate from the outer
+     translate transform that @dnd-kit uses for live reordering */
   .exercise-jiggling {
     animation: jiggle 0.3s ease-in-out infinite;
     transform-origin: center top;
@@ -180,8 +182,20 @@
   }
 
   .exercise-drag-active {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: grabbing;
+  }
+
+  /* Drop confirmation: brief green border pulse */
+  @keyframes drop-settle {
+    0%   { box-shadow: 0 0 0 0px color-mix(in srgb, var(--color-success) 80%, transparent); }
+    35%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 50%, transparent); }
+    100% { box-shadow: 0 0 0 0px transparent; }
+  }
+
+  .exercise-drop-confirm {
+    animation: drop-settle 650ms ease-out forwards;
+    border-radius: 14px;
   }
 
   /* ---- Header ---- */

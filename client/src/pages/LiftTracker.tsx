@@ -1111,9 +1111,10 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
 // ─── Sortable Exercise Card Wrapper ───────────────────────────────────────────
 
-function SortableExerciseCard({ exercise, isReordering, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
   exercise: Exercise;
   isReordering: boolean;
+  isDropped: boolean;
   isActive: boolean;
   sessionId: number | null;
   onSetLogged: (log: SetLog) => void;
@@ -1123,30 +1124,38 @@ function SortableExerciseCard({ exercise, isReordering, isActive, sessionId, onS
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
 
-  const style: React.CSSProperties = {
+  // Outer div: only handles @dnd-kit's translate transform for live reordering.
+  // The jiggle animation must NOT live here — its `transform: rotate()` would
+  // override the translate3d that @dnd-kit sets via inline style.
+  const outerStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     position: "relative",
     zIndex: isDragging ? 10 : undefined,
   };
 
+  // Inner div: safe to apply rotate-based jiggle and drop-confirm here.
+  const innerClass = isDragging
+    ? "exercise-drag-active"
+    : isDropped
+      ? "exercise-drop-confirm"
+      : isReordering
+        ? "exercise-jiggling"
+        : undefined;
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={isDragging ? "exercise-drag-active" : isReordering ? "exercise-jiggling" : undefined}
-    >
-      <ExerciseCard
-        exercise={exercise}
-        isActive={isActive && !isReordering}
-        sessionId={sessionId}
-        onSetLogged={onSetLogged}
-        onSetUndone={onSetUndone}
-        onExerciseChanged={onExerciseChanged}
-        onTabSwitch={onTabSwitch}
-      />
+    <div ref={setNodeRef} style={outerStyle} {...attributes} {...listeners}>
+      <div className={innerClass}>
+        <ExerciseCard
+          exercise={exercise}
+          isActive={isActive && !isReordering}
+          sessionId={sessionId}
+          onSetLogged={onSetLogged}
+          onSetUndone={onSetUndone}
+          onExerciseChanged={onExerciseChanged}
+          onTabSwitch={onTabSwitch}
+        />
+      </div>
     </div>
   );
 }
@@ -1170,6 +1179,7 @@ export default function LiftTracker() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const [droppedId, setDroppedId] = useState<number | null>(null);
 
   // Sensors: long-press (500 ms hold, ≤5 px movement) activates drag
   const sensors = useSensors(
@@ -1237,6 +1247,10 @@ export default function LiftTracker() {
       saveExercisesOrder(reordered.map((ex) => ex.id));
       return getExercises();
     });
+    // Flash the dropped card green so the user can see where it landed
+    const droppedExId = active.id as number;
+    setDroppedId(droppedExId);
+    setTimeout(() => setDroppedId(null), 700);
   }, [activeTab]);
 
   const handleSetLogged = useCallback((log: SetLog) => {
@@ -1416,6 +1430,7 @@ export default function LiftTracker() {
                   key={`${ex.id}-${activeSession?.id ?? "idle"}`}
                   exercise={ex}
                   isReordering={isReordering}
+                  isDropped={droppedId === ex.id}
                   isActive={isActive && !ex.archived}
                   sessionId={activeSession?.id ?? null}
                   onSetLogged={handleSetLogged}

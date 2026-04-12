@@ -13,8 +13,12 @@ import {
   startSession,
   endSession,
   getSessionSets,
+  getAllSessionSets,
   logSet,
   undoSet,
+  archiveSession,
+  unarchiveSession,
+  deleteArchivedSession,
   getCategories,
   saveCategories,
   addCategory,
@@ -452,6 +456,100 @@ describe("deleteCategory", () => {
     saveCategories(["Push", "Pull"]);
     deleteCategory("Nonexistent");
     expect(getCategories()).toEqual(["Push", "Pull"]);
+  });
+});
+
+describe("getAllSessionSets", () => {
+  it("returns an empty array when no sets have been logged", () => {
+    expect(getAllSessionSets()).toEqual([]);
+  });
+
+  it("returns sets from multiple sessions", () => {
+    const ex1 = createExercise(makeExercise({ name: "Squat" }));
+    const ex2 = createExercise(makeExercise({ name: "Press" }));
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex1.id, weight: 60, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex2.id, weight: 40, repsAchieved: 10 });
+    endSession(s2.id);
+    const all = getAllSessionSets();
+    expect(all.some((s) => s.sessionId === s1.id)).toBe(true);
+    expect(all.some((s) => s.sessionId === s2.id)).toBe(true);
+    expect(all).toHaveLength(2);
+  });
+});
+
+describe("archiveSession / unarchiveSession", () => {
+  it("marks a session as archived", () => {
+    const session = startSession();
+    endSession(session.id);
+    archiveSession(session.id);
+    const stored = getSessions().find((s) => s.id === session.id);
+    expect(stored?.archived).toBe(true);
+  });
+
+  it("unarchive sets archived back to false", () => {
+    const session = startSession();
+    endSession(session.id);
+    archiveSession(session.id);
+    unarchiveSession(session.id);
+    const stored = getSessions().find((s) => s.id === session.id);
+    expect(stored?.archived).toBe(false);
+  });
+
+  it("leaves other sessions untouched", () => {
+    const s1 = startSession();
+    endSession(s1.id);
+    const s2 = startSession();
+    endSession(s2.id);
+    archiveSession(s1.id);
+    const s2Stored = getSessions().find((s) => s.id === s2.id);
+    expect(s2Stored?.archived).toBeFalsy();
+  });
+});
+
+describe("deleteArchivedSession", () => {
+  it("removes the session record", () => {
+    const session = startSession();
+    endSession(session.id);
+    archiveSession(session.id);
+    deleteArchivedSession(session.id);
+    expect(getSessions().find((s) => s.id === session.id)).toBeUndefined();
+  });
+
+  it("removes the session's sets", () => {
+    const ex = createExercise(makeExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(session.id);
+    archiveSession(session.id);
+    deleteArchivedSession(session.id);
+    expect(getAllSessionSets().filter((s) => s.sessionId === session.id)).toHaveLength(0);
+  });
+
+  it("does not remove sets from other sessions", () => {
+    const ex = createExercise(makeExercise());
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(s1.id);
+    archiveSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(s2.id);
+    deleteArchivedSession(s1.id);
+    expect(getAllSessionSets().filter((s) => s.sessionId === s2.id)).toHaveLength(1);
+  });
+
+  it("does not alter exercise lastReps", () => {
+    const ex = createExercise(makeExercise({ lastReps: 8 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 12 });
+    endSession(session.id);
+    archiveSession(session.id);
+    deleteArchivedSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.lastReps).toBe(12);
   });
 });
 

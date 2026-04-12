@@ -715,7 +715,7 @@ function IconLog() {
 
 // ─── Session Log ──────────────────────────────────────────────────────────────
 
-interface HistoryExerciseEntry {
+export interface HistoryExerciseEntry {
   exerciseId: number;
   exerciseName: string;
   category: string;
@@ -725,12 +725,12 @@ interface HistoryExerciseEntry {
   weightIncreased: boolean;
 }
 
-interface HistorySessionEntry {
+export interface HistorySessionEntry {
   session: Session;
   exercises: HistoryExerciseEntry[];
 }
 
-function buildHistoryData(): HistorySessionEntry[] {
+export function buildHistoryData(): HistorySessionEntry[] {
   const allSets = getAllSessionSets();
   const exercises = getExercises();
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
@@ -805,7 +805,7 @@ function buildHistoryData(): HistorySessionEntry[] {
     .filter((e): e is HistorySessionEntry => e !== null);
 }
 
-function getCategorySummary(exercises: HistoryExerciseEntry[]): string | null {
+export function getCategorySummary(exercises: HistoryExerciseEntry[]): string | null {
   if (exercises.length === 0) return null;
   const counts: Record<string, number> = {};
   for (const e of exercises) {
@@ -912,6 +912,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
         <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
           <button
             onClick={onArchive}
+            data-testid={`btn-archive-session-${session.id}`}
             style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
             onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-faint)"}
@@ -925,6 +926,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
           {/* Un-archive on the left */}
           <button
             onClick={onUnarchive}
+            data-testid={`btn-unarchive-session-${session.id}`}
             style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-success)"}
             onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-faint)"}
@@ -938,6 +940,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
                 <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>Delete this log?</span>
                 <button
                   onClick={onDelete}
+                  data-testid={`btn-delete-session-confirm-${session.id}`}
                   style={{ fontSize: "10px", fontWeight: 700, color: "hsl(0 70% 60%)", background: "hsl(0 50% 15%)", border: "1px solid hsl(0 50% 30%)", borderRadius: "6px", padding: "3px 8px", cursor: "pointer" }}
                 >
                   Delete
@@ -952,6 +955,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
             ) : (
               <button
                 onClick={() => setConfirmDelete(true)}
+                data-testid={`btn-delete-session-${session.id}`}
                 style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "hsl(0 60% 55%)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
                 onMouseEnter={(e) => e.currentTarget.style.color = "hsl(0 70% 65%)"}
                 onMouseLeave={(e) => e.currentTarget.style.color = "hsl(0 60% 55%)"}
@@ -982,7 +986,7 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="history-overlay" onClick={onClose} data-testid="history-overlay">
-      <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="history-sheet">
+      <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="session-history-panel">
         {/* Sheet header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
           <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Session Log</h3>
@@ -1001,6 +1005,7 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
             archivedEntries.length > 0 && (
               <button
                 onClick={() => setView("archive")}
+                data-testid="btn-view-archived"
                 style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px", padding: 0 }}
               >
                 View archived ({archivedEntries.length})
@@ -1017,7 +1022,7 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {displayed.length === 0 ? (
-          <p style={{ color: "var(--color-text-faint)", fontSize: "var(--text-sm)", textAlign: "center", padding: "32px 0" }}>
+          <p data-testid="session-log-empty" style={{ color: "var(--color-text-faint)", fontSize: "var(--text-sm)", textAlign: "center", padding: "32px 0" }}>
             {view === "active" ? "No completed sessions yet." : "No archived sessions."}
           </p>
         ) : (
@@ -1733,7 +1738,7 @@ export default function LiftTracker() {
             <button
               onClick={() => setShowHistory(true)}
               title="Session log"
-              data-testid="btn-history"
+              data-testid="btn-open-log"
               style={{
                 display: "flex", alignItems: "center", gap: "4px",
                 background: "none", border: "none", cursor: "pointer",

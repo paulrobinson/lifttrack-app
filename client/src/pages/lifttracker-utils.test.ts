@@ -3,7 +3,9 @@
 // globals and remain accessible within the jsdom environment.
 
 import { describe, it, expect } from "vitest";
-import { parseImportText, buildExportText, encodeState, decodeState, computeSetOutcome } from "./LiftTracker";
+import { parseImportText, buildExportText, encodeState, decodeState, computeSetOutcome, getCategorySummary, buildHistoryData } from "./LiftTracker";
+import type { HistoryExerciseEntry } from "./LiftTracker";
+import { createExercise, startSession, endSession, logSet } from "@/lib/storage";
 import type { Exercise } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -266,5 +268,148 @@ describe("computeSetOutcome", () => {
     const result = computeSetOutcome(5, 15, 8, 20);
     expect(result.decline).toBe(true);
     expect(result.up).toBe(false);
+  });
+});
+
+// ─── getCategorySummary ────────────────────────────────────────────────────────
+
+function makeHistoryEntry(category: string): HistoryExerciseEntry {
+  return {
+    exerciseId: 1,
+    exerciseName: "Test",
+    category,
+    weight: 20,
+    repsAchieved: 8,
+    prevLastReps: null,
+    weightIncreased: false,
+  };
+}
+
+describe("getCategorySummary", () => {
+  it("returns null for an empty array", () => {
+    expect(getCategorySummary([])).toBeNull();
+  });
+
+  it("returns 'All X' when every exercise is in the same category", () => {
+    const entries = [makeHistoryEntry("Chest"), makeHistoryEntry("Chest"), makeHistoryEntry("Chest")];
+    expect(getCategorySummary(entries)).toBe("All Chest");
+  });
+
+  it("returns 'Mostly X' when one category is a strict majority", () => {
+    const entries = [makeHistoryEntry("Back"), makeHistoryEntry("Back"), makeHistoryEntry("Legs")];
+    expect(getCategorySummary(entries)).toBe("Mostly Back");
+  });
+
+  it("returns null when no category has a strict majority", () => {
+    const entries = [makeHistoryEntry("Back"), makeHistoryEntry("Chest")];
+    expect(getCategorySummary(entries)).toBeNull();
+  });
+
+  it("returns null when no category has a strict majority across three categories", () => {
+    const entries = [
+      makeHistoryEntry("Back"),
+      makeHistoryEntry("Chest"),
+      makeHistoryEntry("Legs"),
+    ];
+    expect(getCategorySummary(entries)).toBeNull();
+  });
+});
+
+// ─── buildHistoryData ─────────────────────────────────────────────────────────
+
+function makeStorageExercise(overrides: Partial<Exercise> = {}): Omit<Exercise, "id"> {
+  return {
+    name: "Test Curl",
+    category: "Upper",
+    weight: 20,
+    maxReps: 12,
+    sets: 3,
+    lastReps: 8,
+    sortOrder: 0,
+    archived: false,
+    ...overrides,
+  };
+}
+
+describe("buildHistoryData", () => {
+  it("returns an empty array when there are no sessions", () => {
+    expect(buildHistoryData()).toEqual([]);
+  });
+
+  it("excludes an in-progress (not ended) session", () => {
+    const ex = createExercise(makeStorageExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    // session never ended
+    expect(buildHistoryData()).toEqual([]);
+  });
+
+  it("excludes a completed session that has no sets", () => {
+    const session = startSession();
+    endSession(session.id);
+    expect(buildHistoryData()).toEqual([]);
+  });
+
+  it("includes a completed session that has sets", () => {
+    const ex = createExercise(makeStorageExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+    const data = buildHistoryData();
+    expect(data).toHaveLength(1);
+    expect(data[0].session.id).toBe(session.id);
+  });
+
+  it("orders sessions most-recent-first", () => {
+    const ex = createExercise(makeStorageExercise());
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s2.id);
+    const data = buildHistoryData();
+    expect(data[0].session.id).toBe(s2.id);
+    expect(data[1].session.id).toBe(s1.id);
+  });
+
+  it("sets weightIncreased=false on the first session for an exercise", () => {
+    const ex = createExercise(makeStorageExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+    const entry = buildHistoryData()[0].exercises[0];
+    expect(entry.weightIncreased).toBe(false);
+  });
+
+  it("sets weightIncreased=true when weight goes up between sessions", () => {
+    const ex = createExercise(makeStorageExercise());
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 25, repsAchieved: 8 });
+    endSession(s2.id);
+    // Most recent session is first; its exercise entry should show weight increased
+    const latestEntry = buildHistoryData()[0].exercises[0];
+    expect(latestEntry.weightIncreased).toBe(true);
+  });
+
+  it("preserves the prevLastReps snapshot from logSet", () => {
+    const ex = createExercise(makeStorageExercise({ lastReps: 6 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(session.id);
+    const entry = buildHistoryData()[0].exercises[0];
+    expect(entry.prevLastReps).toBe(6);
+  });
+
+  it("includes the exercise category on each entry", () => {
+    const ex = createExercise(makeStorageExercise({ category: "Legs" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(session.id);
+    const entry = buildHistoryData()[0].exercises[0];
+    expect(entry.category).toBe("Legs");
   });
 });

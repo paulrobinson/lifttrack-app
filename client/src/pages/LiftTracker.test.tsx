@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -485,5 +485,134 @@ describe("remove group", () => {
     renderApp();
     await user.click(screen.getByTestId("tab-archive"));
     expect(screen.queryByTestId("btn-remove-group")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Session log panel ────────────────────────────────────────────────────────
+
+describe("session log panel", () => {
+  it("opens when the log button is clicked and closes on backdrop click", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    expect(screen.queryByTestId("session-history-panel")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.getByTestId("session-history-panel")).toBeInTheDocument();
+    await user.click(screen.getByTestId("history-overlay"));
+    expect(screen.queryByTestId("session-history-panel")).not.toBeInTheDocument();
+  });
+
+  it("shows empty state when there are no completed sessions", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.getByTestId("session-log-empty")).toBeInTheDocument();
+  });
+
+  it("shows a completed session card in the log", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.queryByTestId("session-log-empty")).not.toBeInTheDocument();
+    expect(screen.getByText("Bench Press")).toBeInTheDocument();
+  });
+
+  it("does not show an in-progress session in the log", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Deadlift" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 80, repsAchieved: 5 });
+    // session not ended
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.getByTestId("session-log-empty")).toBeInTheDocument();
+  });
+
+  it("archive button moves session out of active log view", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 0, repsAchieved: 10 });
+    endSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId(`btn-archive-session-${session.id}`));
+    expect(screen.getByTestId("session-log-empty")).toBeInTheDocument();
+  });
+
+  it("archived session appears in archive view", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Squat" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 6 });
+    endSession(session.id);
+    archiveSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId("btn-view-archived"));
+    expect(screen.getByText("Squat")).toBeInTheDocument();
+  });
+
+  it("un-archiving a session moves it back to active log", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Overhead Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 40, repsAchieved: 8 });
+    endSession(session.id);
+    archiveSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId("btn-view-archived"));
+    await user.click(screen.getByTestId(`btn-unarchive-session-${session.id}`));
+    // Now in active view
+    expect(screen.getByText("Overhead Press")).toBeInTheDocument();
+  });
+
+  it("deleting from archive view removes the session entirely", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Leg Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 100, repsAchieved: 10 });
+    endSession(session.id);
+    archiveSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId("btn-view-archived"));
+    await user.click(screen.getByTestId(`btn-delete-session-${session.id}`));
+    await user.click(screen.getByTestId(`btn-delete-session-confirm-${session.id}`));
+    expect(getSessions().find((s) => s.id === session.id)).toBeUndefined();
+  });
+
+  it("deleting from archive does not change exercise lastReps", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", lastReps: 5 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 12 });
+    endSession(session.id);
+    archiveSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId("btn-view-archived"));
+    await user.click(screen.getByTestId(`btn-delete-session-${session.id}`));
+    await user.click(screen.getByTestId(`btn-delete-session-confirm-${session.id}`));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.lastReps).toBe(12);
+  });
+});
+
+// ─── Export / Import bar ──────────────────────────────────────────────────────
+
+describe("export/import bar", () => {
+  it("renders the export button", () => {
+    renderApp();
+    expect(screen.getByTestId("btn-export")).toBeInTheDocument();
+  });
+
+  it("renders the import button", () => {
+    renderApp();
+    expect(screen.getByTestId("btn-import")).toBeInTheDocument();
   });
 });

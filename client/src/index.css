@@ -588,8 +588,47 @@
     padding: 24px 20px 40px;
     width: 100%;
     max-width: 480px;
-    max-height: 85dvh;
+    height: 85dvh;
     overflow-y: auto;
     animation: slide-up 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ---- Export / Import bar ---- */
+  .export-import-bar {
+    display: flex;
+    align-items: stretch;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .export-import-bar .bar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1;
+    padding: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    transition: color 150ms ease, background 150ms ease;
+  }
+
+  .export-import-bar .bar-btn:hover {
+    color: var(--color-text);
+    background: var(--color-surface-2);
+  }
+
+  .export-import-bar .bar-divider {
+    width: 1px;
+    background: var(--color-border);
+    flex-shrink: 0;
+    align-self: stretch;
   }
 }

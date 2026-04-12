@@ -263,6 +263,11 @@ export function archiveSession(id: number): void {
   save(KEYS.sessions, sessions.map((s) => s.id === id ? { ...s, archived: true } : s));
 }
 
+export function unarchiveSession(id: number): void {
+  const sessions = getSessions();
+  save(KEYS.sessions, sessions.map((s) => s.id === id ? { ...s, archived: false } : s));
+}
+
 /** Remove a session and its sets from storage without touching any exercise data. */
 export function deleteArchivedSession(id: number): void {
   save(KEYS.sessions, getSessions().filter((s) => s.id !== id));

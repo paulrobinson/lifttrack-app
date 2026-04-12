@@ -36,6 +36,7 @@ import {
   undoSet,
   getAllSessionSets,
   archiveSession,
+  unarchiveSession,
   deleteArchivedSession,
   getCategories,
   addCategory,
@@ -408,22 +409,20 @@ function ImportButton({ onImport }: { onImport: () => void }) {
     );
   }
 
+  // Idle state: render a bar-compatible button (no wrapper div — placed inside .export-import-bar)
   return (
-    <div style={{ textAlign: "center", marginBottom: "12px" }}>
-      <button
-        onClick={() => setStep("warn")}
-        style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: "11px", color: "var(--color-text-faint)",
-          textDecoration: "underline", textUnderlineOffset: "3px",
-          opacity: 0.5,
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.opacity = "1"}
-        onMouseLeave={(e) => e.currentTarget.style.opacity = "0.5"}
-      >
-        Import exercises
-      </button>
-    </div>
+    <button
+      onClick={() => setStep("warn")}
+      className="bar-btn"
+      data-testid="btn-import"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 5 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      Import
+    </button>
   );
 }
 
@@ -820,11 +819,12 @@ function getCategorySummary(exercises: HistoryExerciseEntry[]): string | null {
   return null;
 }
 
-function SessionLogCard({ entry, showArchive, showDelete, onArchive, onDelete }: {
+function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive, onDelete }: {
   entry: HistorySessionEntry;
   showArchive: boolean;
   showDelete: boolean;
   onArchive: () => void;
+  onUnarchive: () => void;
   onDelete: () => void;
 }) {
   const { session, exercises } = entry;
@@ -921,33 +921,45 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onDelete }:
         </div>
       )}
       {showDelete && (
-        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px" }}>
-          {confirmDelete ? (
-            <>
-              <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>Delete this log?</span>
+        <div style={{ marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Un-archive on the left */}
+          <button
+            onClick={onUnarchive}
+            style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-success)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-faint)"}
+          >
+            <IconArchive /> Un-archive
+          </button>
+          {/* Delete on the right */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {confirmDelete ? (
+              <>
+                <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>Delete this log?</span>
+                <button
+                  onClick={onDelete}
+                  style={{ fontSize: "10px", fontWeight: 700, color: "hsl(0 70% 60%)", background: "hsl(0 50% 15%)", border: "1px solid hsl(0 50% 30%)", borderRadius: "6px", padding: "3px 8px", cursor: "pointer" }}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  style={{ fontSize: "10px", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
               <button
-                onClick={onDelete}
-                style={{ fontSize: "10px", fontWeight: 700, color: "hsl(0 70% 60%)", background: "hsl(0 50% 15%)", border: "1px solid hsl(0 50% 30%)", borderRadius: "6px", padding: "3px 8px", cursor: "pointer" }}
+                onClick={() => setConfirmDelete(true)}
+                style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "hsl(0 60% 55%)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
+                onMouseEnter={(e) => e.currentTarget.style.color = "hsl(0 70% 65%)"}
+                onMouseLeave={(e) => e.currentTarget.style.color = "hsl(0 60% 55%)"}
               >
-                Delete
+                <IconTrash /> Delete
               </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                style={{ fontSize: "10px", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "hsl(0 60% 55%)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
-              onMouseEnter={(e) => e.currentTarget.style.color = "hsl(0 70% 65%)"}
-              onMouseLeave={(e) => e.currentTarget.style.color = "hsl(0 60% 55%)"}
-            >
-              <IconTrash /> Delete
-            </button>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -964,15 +976,9 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
   const archivedEntries = historyData.filter((e) => e.session.archived);
   const displayed = view === "active" ? activeEntries : archivedEntries;
 
-  const handleArchive = (sessionId: number) => {
-    archiveSession(sessionId);
-    refresh();
-  };
-
-  const handleDelete = (sessionId: number) => {
-    deleteArchivedSession(sessionId);
-    refresh();
-  };
+  const handleArchive = (sessionId: number) => { archiveSession(sessionId); refresh(); };
+  const handleUnarchive = (sessionId: number) => { unarchiveSession(sessionId); refresh(); };
+  const handleDelete = (sessionId: number) => { deleteArchivedSession(sessionId); refresh(); };
 
   return (
     <div className="history-overlay" onClick={onClose} data-testid="history-overlay">
@@ -1022,6 +1028,7 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
               showArchive={view === "active"}
               showDelete={view === "archive"}
               onArchive={() => handleArchive(entry.session.id)}
+              onUnarchive={() => handleUnarchive(entry.session.id)}
               onDelete={() => handleDelete(entry.session.id)}
             />
           ))
@@ -1722,10 +1729,10 @@ export default function LiftTracker() {
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button
               onClick={() => setShowHistory(true)}
-              title="Session history"
+              title="Session log"
               data-testid="btn-history"
               style={{
                 display: "flex", alignItems: "center", gap: "4px",
@@ -1741,53 +1748,6 @@ export default function LiftTracker() {
               Log
             </button>
 
-            <button
-              onClick={() => setShowExportModal(true)}
-              title="Export exercises"
-              data-testid="btn-export"
-              style={{
-                display: "flex", alignItems: "center", gap: "4px",
-                background: "none", border: "none", cursor: "pointer",
-                color: "var(--color-text-muted)", padding: "4px 6px", borderRadius: "8px",
-                fontSize: "var(--text-xs)", fontWeight: 600,
-                transition: "color 150ms ease",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text)"}
-              onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Export
-            </button>
-
-            {isActive && (
-              <span
-                data-testid="session-counter"
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 700,
-                  color: doneCount > 0 ? "var(--color-success)" : "var(--color-text-muted)",
-                  background: doneCount > 0 ? "var(--color-success-dim)" : "var(--color-surface-2, hsl(220 12% 18%))",
-                  border: `1px solid ${doneCount > 0 ? "hsl(142 40% 28%)" : "var(--color-border)"}`,
-                  borderRadius: "99px",
-                  padding: "3px 10px 3px 8px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  transition: "all 200ms ease",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                {doneCount}
-              </span>
-            )}
-
             {!isActive ? (
               <button className="btn btn-start" onClick={handleStartSession} data-testid="btn-start-session">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z" /></svg>
@@ -1801,6 +1761,34 @@ export default function LiftTracker() {
             )}
           </div>
         </div>
+
+        {/* Exercise counter row — only visible during an active session */}
+        {isActive && (
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px 6px" }}>
+            <span
+              data-testid="session-counter"
+              style={{
+                fontSize: "var(--text-sm)",
+                fontWeight: 700,
+                color: doneCount > 0 ? "var(--color-success)" : "var(--color-text-muted)",
+                background: doneCount > 0 ? "var(--color-success-dim)" : "var(--color-surface-2, hsl(220 12% 18%))",
+                border: `1px solid ${doneCount > 0 ? "hsl(142 40% 28%)" : "var(--color-border)"}`,
+                borderRadius: "99px",
+                padding: "3px 10px 3px 8px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 200ms ease",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              {doneCount}
+            </span>
+          </div>
+        )}
 
         {/* Tab bar */}
         <div className="tab-bar" data-testid="tab-bar">
@@ -1958,7 +1946,22 @@ export default function LiftTracker() {
           </p>
         )}
 
-        <ImportButton onImport={() => { refreshExercises(); refreshCategories(); }} />
+        <div className="export-import-bar">
+          <button
+            className="bar-btn"
+            onClick={() => setShowExportModal(true)}
+            data-testid="btn-export"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export
+          </button>
+          <div className="bar-divider" />
+          <ImportButton onImport={() => { refreshExercises(); refreshCategories(); }} />
+        </div>
         <ResetButton onReset={refreshExercises} />
       </main>
 

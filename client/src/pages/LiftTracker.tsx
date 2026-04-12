@@ -35,6 +35,8 @@ import {
   logSet,
   undoSet,
   getAllSessionSets,
+  archiveSession,
+  deleteArchivedSession,
   getCategories,
   addCategory,
   deleteCategory,
@@ -700,20 +702,24 @@ function IconTrash() {
   );
 }
 
-function IconHistory() {
+function IconLog() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="2" width="16" height="20" rx="2" />
+      <line x1="8" y1="2" x2="8" y2="22" />
+      <line x1="11" y1="7" x2="17" y2="7" />
+      <line x1="11" y1="11" x2="17" y2="11" />
+      <line x1="11" y1="15" x2="17" y2="15" />
     </svg>
   );
 }
 
-// ─── Session History ──────────────────────────────────────────────────────────
+// ─── Session Log ──────────────────────────────────────────────────────────────
 
 interface HistoryExerciseEntry {
   exerciseId: number;
   exerciseName: string;
+  category: string;
   weight: number;
   repsAchieved: number;
   prevLastReps: number | null;
@@ -767,7 +773,7 @@ function buildHistoryData(): HistorySessionEntry[] {
       const sessionSets = allSets.filter((s) => s.sessionId === session.id);
       if (sessionSets.length === 0) return null;
 
-      // One entry per exercise; if multiple sets for the same exercise, last wins
+      // One entry per exercise; if multiple sets for same exercise, last wins
       const byExercise = new Map<number, SessionSet>();
       for (const set of sessionSets) {
         byExercise.set(set.exerciseId, set);
@@ -777,8 +783,8 @@ function buildHistoryData(): HistorySessionEntry[] {
       byExercise.forEach((set, exerciseId) => {
         const exercise = exerciseMap.get(exerciseId);
         const exerciseName = exercise?.name ?? `Exercise #${exerciseId}`;
+        const category = exercise?.category ?? "";
 
-        // Detect weight increase vs the immediately preceding session for this exercise
         const history = exerciseHistory.get(exerciseId) ?? [];
         const idx = history.findIndex((h) => h.sessionId === session.id);
         const prevWeight = idx > 0 ? history[idx - 1].weight : null;
@@ -787,6 +793,7 @@ function buildHistoryData(): HistorySessionEntry[] {
         exerciseEntries.push({
           exerciseId,
           exerciseName,
+          category,
           weight: set.weight,
           repsAchieved: set.repsAchieved,
           prevLastReps: set.prevLastReps,
@@ -799,128 +806,225 @@ function buildHistoryData(): HistorySessionEntry[] {
     .filter((e): e is HistorySessionEntry => e !== null);
 }
 
+function getCategorySummary(exercises: HistoryExerciseEntry[]): string | null {
+  if (exercises.length === 0) return null;
+  const counts: Record<string, number> = {};
+  for (const e of exercises) {
+    if (e.category) counts[e.category] = (counts[e.category] ?? 0) + 1;
+  }
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) return null;
+  const [topCat, topCount] = sorted[0];
+  if (topCount === exercises.length) return `All ${topCat}`;
+  if (topCount > exercises.length / 2) return `Mostly ${topCat}`;
+  return null;
+}
+
+function SessionLogCard({ entry, showArchive, showDelete, onArchive, onDelete }: {
+  entry: HistorySessionEntry;
+  showArchive: boolean;
+  showDelete: boolean;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const { session, exercises } = entry;
+  const startDate = new Date(session.startedAt);
+  const endDate = session.endedAt ? new Date(session.endedAt) : null;
+
+  const dateStr = startDate.toLocaleDateString(undefined, {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  });
+  const timeStr = startDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const durationStr = endDate
+    ? (() => { const m = Math.round((endDate.getTime() - startDate.getTime()) / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; })()
+    : "";
+
+  const upCount = exercises.filter((e) => { const p = e.prevLastReps ?? 0; return p > 0 && e.repsAchieved > p; }).length;
+  const downCount = exercises.filter((e) => { const p = e.prevLastReps ?? 0; return p > 0 && e.repsAchieved < p; }).length;
+  const weightUpCount = exercises.filter((e) => e.weightIncreased).length;
+  const categorySummary = getCategorySummary(exercises);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  return (
+    <div style={{ background: "hsl(220 14% 12%)", border: "1px solid var(--color-border)", borderRadius: "14px", padding: "14px 16px", marginBottom: "10px" }}>
+      {/* Header: date + trend badges */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "var(--text-sm)" }}>{dateStr}</div>
+          <div style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginTop: "2px" }}>
+            {timeStr}{durationStr ? ` · ${durationStr}` : ""} · {exercises.length} exercise{exercises.length !== 1 ? "s" : ""}
+          </div>
+          {categorySummary && (
+            <div style={{ fontSize: "10px", fontWeight: 600, color: "var(--color-text-faint)", marginTop: "3px", letterSpacing: "0.03em" }}>
+              {categorySummary}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "2px" }}>
+          {upCount > 0 && (
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(142 70% 50%)", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+              {upCount} up
+            </span>
+          )}
+          {downCount > 0 && (
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-warning)", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+              {downCount} down
+            </span>
+          )}
+          {weightUpCount > 0 && (
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)", background: "hsl(200 50% 14%)", border: "1px solid hsl(200 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+              {weightUpCount} ↑ wt
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Exercise rows */}
+      <div style={{ borderTop: "1px solid hsl(220 10% 18%)", marginTop: "8px" }}>
+        {exercises.map((ex) => {
+          const prev = ex.prevLastReps ?? 0;
+          const isUp = prev > 0 && ex.repsAchieved > prev;
+          const isDown = prev > 0 && ex.repsAchieved < prev;
+          return (
+            <div key={ex.exerciseId} style={{ display: "flex", alignItems: "center", padding: "5px 0", borderBottom: "1px solid hsl(220 10% 18%)" }}>
+              <span style={{ flex: 1, fontWeight: 600, fontSize: "var(--text-xs)", color: "var(--color-text)", minWidth: 0, marginRight: "8px" }}>
+                {ex.exerciseName}
+              </span>
+              {/* Fixed-width right section keeps weight always left-aligned in the column */}
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", minWidth: "76px", textAlign: "right" }}>
+                {ex.weight}kg × {ex.repsAchieved}
+              </span>
+              <div style={{ width: "30px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", flexShrink: 0 }}>
+                {ex.weightIncreased && (
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)" }} title="Weight up from last session">↑w</span>
+                )}
+                {isUp && <span style={{ display: "inline-flex", color: "hsl(142 70% 50%)" }}><IconUp /></span>}
+                {isDown && <span style={{ display: "inline-flex", color: "var(--color-warning)" }}><IconDecline /></span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Card footer: archive / delete action */}
+      {showArchive && (
+        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={onArchive}
+            style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-faint)"}
+          >
+            <IconArchive /> Archive
+          </button>
+        </div>
+      )}
+      {showDelete && (
+        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px" }}>
+          {confirmDelete ? (
+            <>
+              <span style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>Delete this log?</span>
+              <button
+                onClick={onDelete}
+                style={{ fontSize: "10px", fontWeight: 700, color: "hsl(0 70% 60%)", background: "hsl(0 50% 15%)", border: "1px solid hsl(0 50% 30%)", borderRadius: "6px", padding: "3px 8px", cursor: "pointer" }}
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{ fontSize: "10px", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: 600, color: "hsl(0 60% 55%)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "hsl(0 70% 65%)"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "hsl(0 60% 55%)"}
+            >
+              <IconTrash /> Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
-  const [historyData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
+  const [historyData, setHistoryData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
+  const [view, setView] = useState<"active" | "archive">("active");
+
+  const refresh = () => setHistoryData(buildHistoryData());
+
+  const activeEntries = historyData.filter((e) => !e.session.archived);
+  const archivedEntries = historyData.filter((e) => e.session.archived);
+  const displayed = view === "active" ? activeEntries : archivedEntries;
+
+  const handleArchive = (sessionId: number) => {
+    archiveSession(sessionId);
+    refresh();
+  };
+
+  const handleDelete = (sessionId: number) => {
+    deleteArchivedSession(sessionId);
+    refresh();
+  };
 
   return (
     <div className="history-overlay" onClick={onClose} data-testid="history-overlay">
       <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="history-sheet">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Session History</h3>
+        {/* Sheet header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Session Log</h3>
           <button
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
-            aria-label="Close history"
+            aria-label="Close log"
           >
             ×
           </button>
         </div>
 
-        {historyData.length === 0 ? (
+        {/* Archive / active toggle link */}
+        <div style={{ marginBottom: "14px" }}>
+          {view === "active" ? (
+            archivedEntries.length > 0 && (
+              <button
+                onClick={() => setView("archive")}
+                style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px", padding: 0 }}
+              >
+                View archived ({archivedEntries.length})
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => setView("active")}
+              style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            >
+              ← Back to log
+            </button>
+          )}
+        </div>
+
+        {displayed.length === 0 ? (
           <p style={{ color: "var(--color-text-faint)", fontSize: "var(--text-sm)", textAlign: "center", padding: "32px 0" }}>
-            No completed sessions yet.
+            {view === "active" ? "No completed sessions yet." : "No archived sessions."}
           </p>
         ) : (
-          historyData.map(({ session, exercises }) => {
-            const startDate = new Date(session.startedAt);
-            const endDate = session.endedAt ? new Date(session.endedAt) : null;
-
-            const dateStr = startDate.toLocaleDateString(undefined, {
-              weekday: "short", month: "short", day: "numeric", year: "numeric",
-            });
-            const timeStr = startDate.toLocaleTimeString(undefined, {
-              hour: "2-digit", minute: "2-digit",
-            });
-
-            let durationStr = "";
-            if (endDate) {
-              const mins = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
-              durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-            }
-
-            const upCount = exercises.filter((e) => {
-              const prev = e.prevLastReps ?? 0;
-              return prev > 0 && e.repsAchieved > prev;
-            }).length;
-            const downCount = exercises.filter((e) => {
-              const prev = e.prevLastReps ?? 0;
-              return prev > 0 && e.repsAchieved < prev;
-            }).length;
-            const weightUpCount = exercises.filter((e) => e.weightIncreased).length;
-
-            return (
-              <div key={session.id} style={{
-                background: "hsl(220 14% 12%)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "14px",
-                padding: "14px 16px",
-                marginBottom: "10px",
-              }}>
-                {/* Card header: date + badges */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "var(--text-sm)" }}>{dateStr}</div>
-                    <div style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginTop: "2px" }}>
-                      {timeStr}{durationStr ? ` · ${durationStr}` : ""}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "2px" }}>
-                    {upCount > 0 && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(142 70% 50%)", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
-                        {upCount} up
-                      </span>
-                    )}
-                    {downCount > 0 && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-warning)", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
-                        {downCount} down
-                      </span>
-                    )}
-                    {weightUpCount > 0 && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)", background: "hsl(200 50% 14%)", border: "1px solid hsl(200 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
-                        {weightUpCount} ↑ wt
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Exercise rows */}
-                {exercises.map((entry, i) => {
-                  const prev = entry.prevLastReps ?? 0;
-                  const isUp = prev > 0 && entry.repsAchieved > prev;
-                  const isDown = prev > 0 && entry.repsAchieved < prev;
-
-                  return (
-                    <div key={entry.exerciseId} style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 0",
-                      borderTop: i === 0 ? "1px solid hsl(220 10% 18%)" : undefined,
-                      borderBottom: "1px solid hsl(220 10% 18%)",
-                    }}>
-                      <span style={{ fontWeight: 600, fontSize: "var(--text-xs)", color: "var(--color-text)", flex: 1, minWidth: 0, marginRight: "8px" }}>
-                        {entry.exerciseName}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-                        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
-                          {entry.weight}kg × {entry.repsAchieved}
-                        </span>
-                        {entry.weightIncreased && (
-                          <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)" }} title="Weight increased from last session">↑w</span>
-                        )}
-                        {isUp && (
-                          <span style={{ display: "inline-flex", alignItems: "center", color: "hsl(142 70% 50%)" }}><IconUp /></span>
-                        )}
-                        {isDown && (
-                          <span style={{ display: "inline-flex", alignItems: "center", color: "var(--color-warning)" }}><IconDecline /></span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })
+          displayed.map((entry) => (
+            <SessionLogCard
+              key={entry.session.id}
+              entry={entry}
+              showArchive={view === "active"}
+              showDelete={view === "archive"}
+              onArchive={() => handleArchive(entry.session.id)}
+              onDelete={() => handleDelete(entry.session.id)}
+            />
+          ))
         )}
       </div>
     </div>
@@ -1633,8 +1737,8 @@ export default function LiftTracker() {
               onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text)"}
               onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
             >
-              <IconHistory />
-              History
+              <IconLog />
+              Log
             </button>
 
             <button
@@ -1687,7 +1791,7 @@ export default function LiftTracker() {
             {!isActive ? (
               <button className="btn btn-start" onClick={handleStartSession} data-testid="btn-start-session">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z" /></svg>
-                Start Workout
+                Start
               </button>
             ) : (
               <button className="btn btn-end" onClick={() => setConfirmEnd(true)} data-testid="btn-end-session">

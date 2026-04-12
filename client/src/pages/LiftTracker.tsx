@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   MouseSensor,
@@ -1187,15 +1187,25 @@ function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testId
   );
 }
 
-function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSet, settings }: {
+function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, loggedOrder, onTap, onTapSet, onUndoLastSet, settings }: {
   exercise: Exercise;
   isActive: boolean;
   loggedReps: number | null;
   loggedRepsSets?: (number | null)[];
+  loggedOrder?: number[];
   onTap: (r: number) => void;
   onTapSet?: (i: number, r: number) => void;
+  onUndoLastSet?: () => void;
   settings: Settings;
 }) {
+  // Snapshot initial reference values on mount so that logging a set (which
+  // mutates exercise.lastReps via logSet) doesn't corrupt the reference
+  // display for other bars in separate-bars mode.
+  const initialRefs = useRef({
+    lastReps: exercise.lastReps,
+    lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : undefined,
+  });
+
   if (!settings.showSeparateBars) {
     return (
       <RepBarRow
@@ -1209,12 +1219,35 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
   }
 
   // Separate bars mode: one bar per set, each independently tappable
-  const numBars = exercise.lastRepsSets?.length ?? exercise.sets;
+  const numBars = initialRefs.current.lastRepsSets?.length ?? exercise.sets;
+  const lastLoggedIdx = loggedOrder && loggedOrder.length > 0 ? loggedOrder[loggedOrder.length - 1] : -1;
+
   return (
     <div data-testid="rep-bar-multi">
       {Array.from({ length: numBars }, (_, i) => {
-        const ref = exercise.lastRepsSets?.[i] ?? exercise.lastReps;
+        const ref = initialRefs.current.lastRepsSets?.[i] ?? initialRefs.current.lastReps;
         const setLogged = loggedRepsSets?.[i] ?? null;
+        const isLastLogged = i === lastLoggedIdx;
+
+        // Wrap the most-recently-logged bar in a tap-to-undo overlay (mirrors
+        // single-bar undo UX so users know they can reverse it).
+        if (setLogged !== null && isLastLogged && isActive && onUndoLastSet) {
+          return (
+            <div key={i} onClick={onUndoLastSet} style={{ cursor: "pointer" }}
+              data-testid={`rep-bar-undo-set-${i}`}>
+              <RepBarRow
+                maxReps={exercise.maxReps}
+                referenceReps={ref}
+                isActive={false}
+                loggedReps={setLogged}
+                onTap={() => {}}
+                testIdSuffix={`-set-${i}`}
+              />
+              <p className="undo-hint">Tap to undo</p>
+            </div>
+          );
+        }
+
         return (
           <RepBarRow
             key={i}
@@ -1748,33 +1781,17 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
         {/* Rep bar — multi mode (separate bars) */}
         {!isSingleMode && (
-          <>
-            <RepBar
-              exercise={exercise}
-              isActive={isActive}
-              loggedReps={null}
-              loggedRepsSets={loggedRepsSets}
-              onTap={() => {}}
-              onTapSet={handleRepTapSet}
-              settings={settings}
-            />
-            {isActive && loggedOrder.length > 0 && (
-              <button
-                onClick={handleUndoLastSet}
-                data-testid="btn-undo-last-set"
-                style={{
-                  marginTop: "6px", background: "none", border: "none", cursor: "pointer",
-                  fontSize: "11px", color: "var(--color-text-faint)", padding: "0",
-                  textDecoration: "underline", textUnderlineOffset: "2px",
-                  transition: "color 150ms ease",
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
-                onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-faint)"}
-              >
-                undo last set
-              </button>
-            )}
-          </>
+          <RepBar
+            exercise={exercise}
+            isActive={isActive}
+            loggedReps={null}
+            loggedRepsSets={loggedRepsSets}
+            loggedOrder={loggedOrder}
+            onTap={() => {}}
+            onTapSet={handleRepTapSet}
+            onUndoLastSet={handleUndoLastSet}
+            settings={settings}
+          />
         )}
 
         {/* Weight prompt */}

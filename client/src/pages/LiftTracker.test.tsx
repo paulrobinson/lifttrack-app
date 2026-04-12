@@ -730,8 +730,8 @@ describe("separate bars mode", () => {
     await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
     await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
 
-    // Undo last (bar 1)
-    await user.click(screen.getByTestId("btn-undo-last-set"));
+    // Undo last (bar 1) by tapping the undo wrapper on the last logged bar
+    await user.click(screen.getByTestId("rep-bar-undo-set-1"));
 
     // Bar 1 should now be unlogged (not filled), bar 0 still filled
     const bar0Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-0-8");

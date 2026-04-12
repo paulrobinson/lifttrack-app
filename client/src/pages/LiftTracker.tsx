@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   type Exercise,
   type Session,
+  type SessionSet,
   initStorage,
   resetExercises,
   replaceExercises,
@@ -28,10 +29,12 @@ import {
   deleteExercise,
   saveExercisesOrder,
   getActiveSession,
+  getSessions,
   startSession,
   endSession,
   logSet,
   undoSet,
+  getAllSessionSets,
   getCategories,
   addCategory,
   deleteCategory,
@@ -697,6 +700,233 @@ function IconTrash() {
   );
 }
 
+function IconHistory() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+// ─── Session History ──────────────────────────────────────────────────────────
+
+interface HistoryExerciseEntry {
+  exerciseId: number;
+  exerciseName: string;
+  weight: number;
+  repsAchieved: number;
+  prevLastReps: number | null;
+  weightIncreased: boolean;
+}
+
+interface HistorySessionEntry {
+  session: Session;
+  exercises: HistoryExerciseEntry[];
+}
+
+function buildHistoryData(): HistorySessionEntry[] {
+  const allSets = getAllSessionSets();
+  const exercises = getExercises();
+  const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
+
+  const allSessions = getSessions();
+  const sessionById = new Map(allSessions.map((s) => [s.id, s]));
+
+  // Build per-exercise weight history: exerciseId -> Map<sessionId, { weight, startedAt }>
+  // Last set in the same session wins (sets are appended in order).
+  const exerciseSessionWeights = new Map<number, Map<number, { weight: number; startedAt: string }>>();
+  for (const set of allSets) {
+    const sess = sessionById.get(set.sessionId);
+    if (!sess) continue;
+    if (!exerciseSessionWeights.has(set.exerciseId)) {
+      exerciseSessionWeights.set(set.exerciseId, new Map());
+    }
+    exerciseSessionWeights.get(set.exerciseId)!.set(set.sessionId, {
+      weight: set.weight,
+      startedAt: sess.startedAt,
+    });
+  }
+
+  // Convert to sorted arrays (chronological) for each exercise
+  const exerciseHistory = new Map<number, Array<{ sessionId: number; weight: number }>>();
+  exerciseSessionWeights.forEach((sessionMap, exerciseId) => {
+    const entries = Array.from(sessionMap.entries())
+      .map(([sessionId, data]) => ({ sessionId, weight: data.weight, startedAt: data.startedAt }))
+      .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+    exerciseHistory.set(exerciseId, entries.map(({ sessionId, weight }) => ({ sessionId, weight })));
+  });
+
+  // Build completed sessions, most recent first
+  const completedSessions = allSessions
+    .filter((s) => s.endedAt !== null)
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+
+  return completedSessions
+    .map((session) => {
+      const sessionSets = allSets.filter((s) => s.sessionId === session.id);
+      if (sessionSets.length === 0) return null;
+
+      // One entry per exercise; if multiple sets for the same exercise, last wins
+      const byExercise = new Map<number, SessionSet>();
+      for (const set of sessionSets) {
+        byExercise.set(set.exerciseId, set);
+      }
+
+      const exerciseEntries: HistoryExerciseEntry[] = [];
+      byExercise.forEach((set, exerciseId) => {
+        const exercise = exerciseMap.get(exerciseId);
+        const exerciseName = exercise?.name ?? `Exercise #${exerciseId}`;
+
+        // Detect weight increase vs the immediately preceding session for this exercise
+        const history = exerciseHistory.get(exerciseId) ?? [];
+        const idx = history.findIndex((h) => h.sessionId === session.id);
+        const prevWeight = idx > 0 ? history[idx - 1].weight : null;
+        const weightIncreased = prevWeight !== null && set.weight > prevWeight;
+
+        exerciseEntries.push({
+          exerciseId,
+          exerciseName,
+          weight: set.weight,
+          repsAchieved: set.repsAchieved,
+          prevLastReps: set.prevLastReps,
+          weightIncreased,
+        });
+      });
+
+      return { session, exercises: exerciseEntries };
+    })
+    .filter((e): e is HistorySessionEntry => e !== null);
+}
+
+function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
+  const [historyData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
+
+  return (
+    <div className="history-overlay" onClick={onClose} data-testid="history-overlay">
+      <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="history-sheet">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Session History</h3>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
+            aria-label="Close history"
+          >
+            ×
+          </button>
+        </div>
+
+        {historyData.length === 0 ? (
+          <p style={{ color: "var(--color-text-faint)", fontSize: "var(--text-sm)", textAlign: "center", padding: "32px 0" }}>
+            No completed sessions yet.
+          </p>
+        ) : (
+          historyData.map(({ session, exercises }) => {
+            const startDate = new Date(session.startedAt);
+            const endDate = session.endedAt ? new Date(session.endedAt) : null;
+
+            const dateStr = startDate.toLocaleDateString(undefined, {
+              weekday: "short", month: "short", day: "numeric", year: "numeric",
+            });
+            const timeStr = startDate.toLocaleTimeString(undefined, {
+              hour: "2-digit", minute: "2-digit",
+            });
+
+            let durationStr = "";
+            if (endDate) {
+              const mins = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+              durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+            }
+
+            const upCount = exercises.filter((e) => {
+              const prev = e.prevLastReps ?? 0;
+              return prev > 0 && e.repsAchieved > prev;
+            }).length;
+            const downCount = exercises.filter((e) => {
+              const prev = e.prevLastReps ?? 0;
+              return prev > 0 && e.repsAchieved < prev;
+            }).length;
+            const weightUpCount = exercises.filter((e) => e.weightIncreased).length;
+
+            return (
+              <div key={session.id} style={{
+                background: "hsl(220 14% 12%)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "14px",
+                padding: "14px 16px",
+                marginBottom: "10px",
+              }}>
+                {/* Card header: date + badges */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "var(--text-sm)" }}>{dateStr}</div>
+                    <div style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginTop: "2px" }}>
+                      {timeStr}{durationStr ? ` · ${durationStr}` : ""}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "2px" }}>
+                    {upCount > 0 && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(142 70% 50%)", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+                        {upCount} up
+                      </span>
+                    )}
+                    {downCount > 0 && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-warning)", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+                        {downCount} down
+                      </span>
+                    )}
+                    {weightUpCount > 0 && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)", background: "hsl(200 50% 14%)", border: "1px solid hsl(200 40% 25%)", borderRadius: "99px", padding: "2px 8px", whiteSpace: "nowrap" }}>
+                        {weightUpCount} ↑ wt
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exercise rows */}
+                {exercises.map((entry, i) => {
+                  const prev = entry.prevLastReps ?? 0;
+                  const isUp = prev > 0 && entry.repsAchieved > prev;
+                  const isDown = prev > 0 && entry.repsAchieved < prev;
+
+                  return (
+                    <div key={entry.exerciseId} style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 0",
+                      borderTop: i === 0 ? "1px solid hsl(220 10% 18%)" : undefined,
+                      borderBottom: "1px solid hsl(220 10% 18%)",
+                    }}>
+                      <span style={{ fontWeight: 600, fontSize: "var(--text-xs)", color: "var(--color-text)", flex: 1, minWidth: 0, marginRight: "8px" }}>
+                        {entry.exerciseName}
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                          {entry.weight}kg × {entry.repsAchieved}
+                        </span>
+                        {entry.weightIncreased && (
+                          <span style={{ fontSize: "10px", fontWeight: 700, color: "hsl(200 70% 60%)" }} title="Weight increased from last session">↑w</span>
+                        )}
+                        {isUp && (
+                          <span style={{ display: "inline-flex", alignItems: "center", color: "hsl(142 70% 50%)" }}><IconUp /></span>
+                        )}
+                        {isDown && (
+                          <span style={{ display: "inline-flex", alignItems: "center", color: "var(--color-warning)" }}><IconDecline /></span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Rep Bar ─────────────────────────────────────────────────────────────────
 
 function RepBar({ exercise, isActive, loggedReps, onTap }: {
@@ -1245,6 +1475,7 @@ export default function LiftTracker() {
   const [activeTab, setActiveTab] = useState<string>(() => getCategories()[0] ?? "Back");
   const [showSummary, setShowSummary] = useState(false);
   const [summaryLogs, setSummaryLogs] = useState<SetLog[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -1388,6 +1619,24 @@ export default function LiftTracker() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              onClick={() => setShowHistory(true)}
+              title="Session history"
+              data-testid="btn-history"
+              style={{
+                display: "flex", alignItems: "center", gap: "4px",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--color-text-muted)", padding: "4px 6px", borderRadius: "8px",
+                fontSize: "var(--text-xs)", fontWeight: 600,
+                transition: "color 150ms ease",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text)"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+            >
+              <IconHistory />
+              History
+            </button>
+
             <button
               onClick={() => setShowExportModal(true)}
               title="Export exercises"
@@ -1619,6 +1868,10 @@ export default function LiftTracker() {
 
       {showSummary && (
         <SessionSummary logs={summaryLogs} onClose={() => setShowSummary(false)} />
+      )}
+
+      {showHistory && (
+        <SessionHistoryPanel onClose={() => setShowHistory(false)} />
       )}
 
       {showExportModal && (

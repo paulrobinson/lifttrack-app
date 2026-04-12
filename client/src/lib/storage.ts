@@ -253,6 +253,10 @@ export function getSessionSets(sessionId: number): SessionSet[] {
   return load<SessionSet>(KEYS.sessionSets).filter((s) => s.sessionId === sessionId);
 }
 
+export function getAllSessionSets(): SessionSet[] {
+  return load<SessionSet>(KEYS.sessionSets);
+}
+
 export function logSet(params: {
   sessionId: number;
   exerciseId: number;

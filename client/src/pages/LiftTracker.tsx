@@ -758,14 +758,14 @@ export function buildHistoryData(): HistorySessionEntry[] {
   exerciseSessionWeights.forEach((sessionMap, exerciseId) => {
     const entries = Array.from(sessionMap.entries())
       .map(([sessionId, data]) => ({ sessionId, weight: data.weight, startedAt: data.startedAt }))
-      .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+      .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime() || a.sessionId - b.sessionId);
     exerciseHistory.set(exerciseId, entries.map(({ sessionId, weight }) => ({ sessionId, weight })));
   });
 
   // Build completed sessions, most recent first
   const completedSessions = allSessions
     .filter((s) => s.endedAt !== null)
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() || b.id - a.id);
 
   return completedSessions
     .map((session) => {
@@ -981,7 +981,7 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
   const displayed = view === "active" ? activeEntries : archivedEntries;
 
   const handleArchive = (sessionId: number) => { archiveSession(sessionId); refresh(); };
-  const handleUnarchive = (sessionId: number) => { unarchiveSession(sessionId); refresh(); };
+  const handleUnarchive = (sessionId: number) => { unarchiveSession(sessionId); setView("active"); refresh(); };
   const handleDelete = (sessionId: number) => { deleteArchivedSession(sessionId); refresh(); };
 
   return (

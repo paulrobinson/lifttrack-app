@@ -516,8 +516,9 @@ describe("session log panel", () => {
     endSession(session.id);
     renderApp();
     await user.click(screen.getByTestId("btn-open-log"));
+    const panel = screen.getByTestId("session-history-panel");
     expect(screen.queryByTestId("session-log-empty")).not.toBeInTheDocument();
-    expect(screen.getByText("Bench Press")).toBeInTheDocument();
+    expect(within(panel).getByText("Bench Press")).toBeInTheDocument();
   });
 
   it("does not show an in-progress session in the log", async () => {
@@ -553,7 +554,7 @@ describe("session log panel", () => {
     renderApp();
     await user.click(screen.getByTestId("btn-open-log"));
     await user.click(screen.getByTestId("btn-view-archived"));
-    expect(screen.getByText("Squat")).toBeInTheDocument();
+    expect(within(screen.getByTestId("session-history-panel")).getByText("Squat")).toBeInTheDocument();
   });
 
   it("un-archiving a session moves it back to active log", async () => {
@@ -568,7 +569,7 @@ describe("session log panel", () => {
     await user.click(screen.getByTestId("btn-view-archived"));
     await user.click(screen.getByTestId(`btn-unarchive-session-${session.id}`));
     // Now in active view
-    expect(screen.getByText("Overhead Press")).toBeInTheDocument();
+    expect(within(screen.getByTestId("session-history-panel")).getByText("Overhead Press")).toBeInTheDocument();
   });
 
   it("deleting from archive view removes the session entirely", async () => {

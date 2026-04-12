@@ -31,12 +31,16 @@ export interface SessionSet {
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
 
+// In preview builds the workflow sets VITE_STORAGE_PREFIX (e.g. "preview_pr42_")
+// so preview data is kept separate from production data in localStorage.
+const _prefix = (import.meta.env.VITE_STORAGE_PREFIX as string | undefined) ?? "";
+
 const KEYS = {
-  exercises: "lt_exercises",
-  sessions: "lt_sessions",
-  sessionSets: "lt_session_sets",
-  nextId: "lt_next_id",
-  categories: "lt_categories",
+  exercises:   `${_prefix}lt_exercises`,
+  sessions:    `${_prefix}lt_sessions`,
+  sessionSets: `${_prefix}lt_session_sets`,
+  nextId:      `${_prefix}lt_next_id`,
+  categories:  `${_prefix}lt_categories`,
 } as const;
 
 export const DEFAULT_CATEGORIES = ["Back", "Chest", "Upper", "Legs"];

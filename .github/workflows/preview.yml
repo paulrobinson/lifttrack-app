@@ -23,6 +23,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_STORAGE_PREFIX: preview_pr${{ github.event.number }}_
 
       - name: Copy built output into preview folder on main
         run: |

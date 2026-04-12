@@ -9,9 +9,16 @@ export interface Exercise {
   maxReps: number;
   sets: number;
   lastReps: number | null;
+  lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)
   sortOrder: number;
   archived: boolean;
 }
+
+export interface Settings {
+  showSeparateBars: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false };
 
 export interface Session {
   id: number;
@@ -41,6 +48,7 @@ const KEYS = {
   sessionSets: `${_prefix}lt_session_sets`,
   nextId:      `${_prefix}lt_next_id`,
   categories:  `${_prefix}lt_categories`,
+  settings:    `${_prefix}lt_settings`,
 } as const;
 
 export const DEFAULT_CATEGORIES = ["Back", "Chest", "Upper", "Legs"];
@@ -298,6 +306,22 @@ export function logSet(params: {
   const sets = load<SessionSet>(KEYS.sessionSets);
   save(KEYS.sessionSets, [...sets, set]);
   return set;
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export function getSettings(): Settings {
+  try {
+    const stored = localStorage.getItem(KEYS.settings);
+    if (!stored) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } as Settings;
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+export function saveSettings(settings: Settings): void {
+  localStorage.setItem(KEYS.settings, JSON.stringify(settings));
 }
 
 export function undoSet(sessionId: number, exerciseId: number): void {

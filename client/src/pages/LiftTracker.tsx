@@ -20,6 +20,7 @@ import {
   type Exercise,
   type Session,
   type SessionSet,
+  type Settings,
   initStorage,
   resetExercises,
   replaceExercises,
@@ -41,6 +42,8 @@ import {
   getCategories,
   addCategory,
   deleteCategory,
+  getSettings,
+  saveSettings,
 } from "@/lib/storage";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -151,15 +154,19 @@ export function parseImportText(text: string): ParseResult {
     const maxReps = parseInt(fields["max reps"]);
     // Weight: strip non-numeric suffixes ("60kg" -> 60), handle "0" for bodyweight
     const weight = parseFloat(fields["weight"].replace(/[^\d.]/g, "") || "0");
-    const sets = parseInt(fields["sets"]);
-    // Reps might be "8" or "8, 8, 8" or "8, 6" — take the first number
-    const repsRaw = fields["reps"].split(/[,\s]+/)[0];
-    const lastReps = parseInt(repsRaw);
+    const parsedSets = parseInt(fields["sets"]);
+    // Reps may be a single value "8" or per-set values "10, 10, 10, 9"
+    const repValues = fields["reps"].split(/,/).map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
     if (isNaN(maxReps)) return fail(blockStart, `"max reps" value "${fields["max reps"]}" is not a number.`);
     if (isNaN(weight)) return fail(blockStart, `"weight" value "${fields["weight"]}" is not a number.`);
-    if (isNaN(sets))   return fail(blockStart, `"sets" value "${fields["sets"]}" is not a number.`);
-    if (isNaN(lastReps)) return fail(blockStart, `"reps" value "${fields["reps"]}" could not be parsed as a number.`);
+    if (isNaN(parsedSets))   return fail(blockStart, `"sets" value "${fields["sets"]}" is not a number.`);
+    if (repValues.length === 0) return fail(blockStart, `"reps" value "${fields["reps"]}" could not be parsed as a number.`);
+
+    const lastReps = repValues[0];
+    // When multiple per-set values are given, store them and use the count as the sets number
+    const lastRepsSets = repValues.length > 1 ? repValues : undefined;
+    const sets = lastRepsSets ? lastRepsSets.length : parsedSets;
 
     exercises.push({
       name,
@@ -168,6 +175,7 @@ export function parseImportText(text: string): ParseResult {
       maxReps,
       sets,
       lastReps,
+      ...(lastRepsSets ? { lastRepsSets } : {}),
       sortOrder: sortOrder++,
       archived: false,
     });
@@ -566,7 +574,10 @@ export function buildExportText(exercises: Exercise[]): string {
       lines.push(`Max reps : ${e.maxReps}`);
       lines.push(`Weight : ${e.weight}`);
       lines.push(`Sets : ${e.sets}`);
-      lines.push(`Reps : ${e.lastReps ?? "\u2013"}`);
+      const repsStr = e.lastRepsSets && e.lastRepsSets.length > 1
+        ? e.lastRepsSets.join(", ")
+        : String(e.lastReps ?? "\u2013");
+      lines.push(`Reps : ${repsStr}`);
       if (i < exs.length - 1) lines.push("\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014");
     });
     lines.push("");
@@ -709,6 +720,15 @@ function IconLog() {
       <line x1="11" y1="7" x2="17" y2="7" />
       <line x1="11" y1="11" x2="17" y2="11" />
       <line x1="11" y1="15" x2="17" y2="15" />
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
@@ -970,6 +990,81 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
   );
 }
 
+// ─── Settings Panel ───────────────────────────────────────────────────────────
+
+function SettingsPanel({ settings, onSettingsChange, onClose }: {
+  settings: Settings;
+  onSettingsChange: (s: Settings) => void;
+  onClose: () => void;
+}) {
+  const toggle = (key: keyof Settings) => {
+    const updated = { ...settings, [key]: !settings[key] };
+    onSettingsChange(updated);
+  };
+
+  return (
+    <div className="history-overlay" onClick={onClose} data-testid="settings-overlay">
+      <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Settings</h3>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
+            aria-label="Close settings"
+            data-testid="settings-close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+          {/* Setting: separate bars */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
+            <div>
+              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
+                Show sets as separate bars
+              </p>
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                Display each set as its own rep bar instead of a single combined bar.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.showSeparateBars}
+              onClick={() => toggle("showSeparateBars")}
+              data-testid="toggle-separate-bars"
+              style={{
+                flexShrink: 0,
+                marginLeft: "16px",
+                width: "44px",
+                height: "26px",
+                borderRadius: "13px",
+                border: "none",
+                cursor: "pointer",
+                background: settings.showSeparateBars ? "var(--color-success)" : "var(--color-border)",
+                position: "relative",
+                transition: "background 200ms ease",
+              }}
+            >
+              <span style={{
+                position: "absolute",
+                top: "3px",
+                left: settings.showSeparateBars ? "21px" : "3px",
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 200ms ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
   const [historyData, setHistoryData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
   const [view, setView] = useState<"active" | "archive">("active");
@@ -1045,41 +1140,88 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
 
 // ─── Rep Bar ─────────────────────────────────────────────────────────────────
 
-function RepBar({ exercise, isActive, loggedReps, onTap }: {
-  exercise: Exercise; isActive: boolean; loggedReps: number | null; onTap: (r: number) => void;
+function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testIdSuffix }: {
+  maxReps: number;
+  referenceReps: number | null;
+  isActive: boolean;
+  loggedReps: number | null;
+  onTap: (r: number) => void;
+  testIdSuffix?: string;
 }) {
-  const { maxReps, lastReps } = exercise;
   const squares = Array.from({ length: maxReps }, (_, i) => i + 1);
+  const suffix = testIdSuffix ?? "";
 
   const getState = (rep: number) => {
     if (loggedReps !== null) return rep <= loggedReps ? "filled" : "empty";
-    return rep <= (lastReps ?? 0) ? "reference" : "empty";
+    return rep <= (referenceReps ?? 0) ? "reference" : "empty";
   };
 
   const showLabel = (rep: number) => {
     if (rep === maxReps) return true;
     if (loggedReps !== null && rep === loggedReps && rep !== maxReps) return true;
-    if (loggedReps === null && rep === (lastReps ?? 0) && rep !== maxReps) return true;
+    if (loggedReps === null && rep === (referenceReps ?? 0) && rep !== maxReps) return true;
     return false;
   };
 
+  const tappable = isActive && loggedReps === null;
+
   return (
-    <div className="rep-bar" data-testid="rep-bar">
+    <div className="rep-bar" data-testid={`rep-bar${suffix}`}>
       {squares.map((rep) => {
         const state = getState(rep);
-        const tappable = isActive && loggedReps === null;
         return (
           <button
             key={rep}
             className={`rep-square ${state} ${tappable ? "tappable" : ""}`}
             onClick={tappable ? () => onTap(rep) : undefined}
             aria-label={`${rep} rep${rep !== 1 ? "s" : ""}`}
-            data-testid={`rep-square-${rep}`}
+            data-testid={`rep-square${suffix}-${rep}`}
             tabIndex={tappable ? 0 : -1}
             style={{ cursor: tappable ? "pointer" : "default" }}
           >
             {showLabel(rep) && <span className="rep-label">{rep}</span>}
           </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RepBar({ exercise, isActive, loggedReps, onTap, settings }: {
+  exercise: Exercise;
+  isActive: boolean;
+  loggedReps: number | null;
+  onTap: (r: number) => void;
+  settings: Settings;
+}) {
+  if (!settings.showSeparateBars) {
+    return (
+      <RepBarRow
+        maxReps={exercise.maxReps}
+        referenceReps={exercise.lastReps}
+        isActive={isActive}
+        loggedReps={loggedReps}
+        onTap={onTap}
+      />
+    );
+  }
+
+  // Separate bars mode: one bar per set, each showing that set's reference reps
+  const numBars = exercise.lastRepsSets?.length ?? exercise.sets;
+  return (
+    <div data-testid="rep-bar-multi">
+      {Array.from({ length: numBars }, (_, i) => {
+        const ref = exercise.lastRepsSets?.[i] ?? exercise.lastReps;
+        return (
+          <RepBarRow
+            key={i}
+            maxReps={exercise.maxReps}
+            referenceReps={ref}
+            isActive={isActive}
+            loggedReps={loggedReps}
+            onTap={onTap}
+            testIdSuffix={`-set-${i}`}
+          />
         );
       })}
     </div>
@@ -1344,7 +1486,7 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
 
-function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
   exercise: Exercise;
   isActive: boolean;
   sessionId: number | null;
@@ -1352,6 +1494,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  settings: Settings;
 }) {
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
   const [isDecline, setIsDecline] = useState(false);
@@ -1360,8 +1503,17 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const computeOutcome = (reps: number, weight: number) =>
-    computeSetOutcome(reps, weight, exercise.lastReps, exercise.weight);
+  // When per-set data exists (e.g. from a multi-set import), compare totals:
+  // current total = reps × sets, previous total = sum of lastRepsSets.
+  const computeOutcome = (reps: number, weight: number) => {
+    const prevTotal = exercise.lastRepsSets && exercise.lastRepsSets.length > 1
+      ? exercise.lastRepsSets.reduce((a, b) => a + b, 0)
+      : exercise.lastReps;
+    const currentReps = exercise.lastRepsSets && exercise.lastRepsSets.length > 1
+      ? reps * exercise.sets
+      : reps;
+    return computeSetOutcome(currentReps, weight, prevTotal, exercise.weight);
+  };
 
   const commitLog = (reps: number, weight: number) => {
     if (!sessionId) return;
@@ -1476,11 +1628,11 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         {/* Rep bar */}
         {loggedReps !== null && isActive && showWeightPrompt === null ? (
           <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
-            <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} />
+            <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} settings={settings} />
             <p className="undo-hint">Tap bar to undo</p>
           </div>
         ) : (
-          <RepBar exercise={exercise} isActive={isActive && loggedReps === null} loggedReps={loggedReps} onTap={handleRepTap} />
+          <RepBar exercise={exercise} isActive={isActive && loggedReps === null} loggedReps={loggedReps} onTap={handleRepTap} settings={settings} />
         )}
 
         {/* Weight prompt */}
@@ -1523,7 +1675,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
 // ─── Sortable Exercise Card Wrapper ───────────────────────────────────────────
 
-function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
   exercise: Exercise;
   isReordering: boolean;
   isDropped: boolean;
@@ -1533,6 +1685,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  settings: Settings;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
 
@@ -1566,6 +1719,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
           onSetUndone={onSetUndone}
           onExerciseChanged={onExerciseChanged}
           onTabSwitch={onTabSwitch}
+          settings={settings}
         />
       </div>
     </div>
@@ -1599,6 +1753,13 @@ export default function LiftTracker() {
   const [isReordering, setIsReordering] = useState(false);
   const [droppedId, setDroppedId] = useState<number | null>(null);
   const [confirmRemoveGroup, setConfirmRemoveGroup] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<Settings>(() => getSettings());
+
+  const handleSettingsChange = useCallback((s: Settings) => {
+    saveSettings(s);
+    setSettings(s);
+  }, []);
 
   // Sensors: long-press (500 ms hold, ≤5 px movement) activates drag
   const sensors = useSensors(
@@ -1753,6 +1914,23 @@ export default function LiftTracker() {
               Log
             </button>
 
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              data-testid="btn-open-settings"
+              aria-label="Settings"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--color-text-muted)", padding: "4px 6px", borderRadius: "8px",
+                transition: "color 150ms ease",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text)"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+            >
+              <IconSettings />
+            </button>
+
             {!isActive ? (
               <button className="btn btn-start" onClick={handleStartSession} data-testid="btn-start-session">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z" /></svg>
@@ -1886,6 +2064,7 @@ export default function LiftTracker() {
               onSetUndone={handleSetUndone}
               onExerciseChanged={refreshExercises}
               onTabSwitch={setActiveTab}
+              settings={settings}
             />
           ))
         ) : (
@@ -1911,6 +2090,7 @@ export default function LiftTracker() {
                   onSetUndone={handleSetUndone}
                   onExerciseChanged={refreshExercises}
                   onTabSwitch={setActiveTab}
+                  settings={settings}
                 />
               ))}
             </SortableContext>
@@ -1984,6 +2164,14 @@ export default function LiftTracker() {
 
       {showHistory && (
         <SessionHistoryPanel onClose={() => setShowHistory(false)} />
+      )}
+
+      {showSettings && (
+        <SettingsPanel
+          settings={settings}
+          onSettingsChange={handleSettingsChange}
+          onClose={() => setShowSettings(false)}
+        />
       )}
 
       {showExportModal && (

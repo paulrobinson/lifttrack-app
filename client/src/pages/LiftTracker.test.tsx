@@ -488,6 +488,135 @@ describe("remove group", () => {
   });
 });
 
+// ─── Settings panel ───────────────────────────────────────────────────────────
+
+describe("settings panel", () => {
+  it("renders a settings button (cog icon) in the header", () => {
+    renderApp();
+    expect(screen.getByTestId("btn-open-settings")).toBeInTheDocument();
+  });
+
+  it("clicking the settings button opens the settings panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("settings-panel")).toBeInTheDocument();
+  });
+
+  it("the settings panel contains the 'Show sets as separate bars' toggle", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-separate-bars")).toBeInTheDocument();
+  });
+
+  it("the toggle starts off (aria-checked=false) by default", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("clicking the toggle switches it to on", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("clicking the toggle twice returns it to off", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("closing the settings panel via the × button hides the panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("settings-close"));
+    expect(screen.queryByTestId("settings-panel")).not.toBeInTheDocument();
+  });
+
+  it("clicking the overlay backdrop closes the settings panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("settings-overlay"));
+    expect(screen.queryByTestId("settings-panel")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Separate bars mode ───────────────────────────────────────────────────────
+
+describe("separate bars mode", () => {
+  it("shows a single rep-bar per exercise when the setting is off (default)", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+    // In single-bar mode there should be exactly one rep-bar per exercise shown
+    // (the default seeded exercises are also rendered; just check no rep-bar-multi)
+    expect(screen.queryByTestId("rep-bar-multi")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("rep-bar").length).toBeGreaterThan(0);
+  });
+
+  it("shows rep-bar-multi containers when the separate bars setting is on", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+
+    // Enable separate bars
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    expect(screen.getAllByTestId("rep-bar-multi").length).toBeGreaterThan(0);
+  });
+
+  it("renders one bar row per set when separate bars is on", async () => {
+    const user = userEvent.setup();
+    // 3 sets, no lastRepsSets → should show 3 bar rows
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Each rep-bar-multi container should have 3 children (rep-bar-set-0, -1, -2)
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+    expect(within(pullUpsContainer).getAllByTestId(/^rep-bar-set-/).length).toBe(3);
+  });
+
+  it("renders one bar per lastRepsSets entry when per-set data is present", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({
+      name: "Pull Ups",
+      category: "Back",
+      sets: 4,
+      lastReps: 10,
+      lastRepsSets: [10, 10, 10, 9],
+    }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+    // lastRepsSets has 4 entries → 4 bars
+    expect(within(pullUpsContainer).getAllByTestId(/^rep-bar-set-/).length).toBe(4);
+  });
+});
+
 // ─── Session log panel ────────────────────────────────────────────────────────
 
 describe("session log panel", () => {

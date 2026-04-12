@@ -413,3 +413,89 @@ describe("buildHistoryData", () => {
     expect(entry.category).toBe("Legs");
   });
 });
+
+// ─── parseImportText – multi-set reps ─────────────────────────────────────────
+
+describe("parseImportText with multi-set reps", () => {
+  it("parses a comma-separated reps field into lastRepsSets", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 4\nReps : 10, 10, 10, 9\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const ex = result.exercises[0];
+    expect(ex.lastRepsSets).toEqual([10, 10, 10, 9]);
+  });
+
+  it("sets lastReps to the first value from a multi-set reps field", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 4\nReps : 10, 10, 10, 9\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].lastReps).toBe(10);
+  });
+
+  it("derives sets count from the number of rep values when multiple are given", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 10, 10, 9\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].sets).toBe(3);
+    expect(result.exercises[0].lastRepsSets).toEqual([10, 10, 9]);
+  });
+
+  it("overrides the Sets field with the reps count when they differ", () => {
+    // Sets says 3 but reps has 4 values — reps count wins
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 10, 10, 10, 9\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].sets).toBe(4);
+  });
+
+  it("does NOT set lastRepsSets for a single rep value", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].lastRepsSets).toBeUndefined();
+    expect(result.exercises[0].lastReps).toBe(8);
+  });
+
+  it("fails gracefully when reps values are all non-numeric", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : abc, def\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.message).toMatch(/reps/i);
+  });
+});
+
+// ─── buildExportText – multi-set reps ─────────────────────────────────────────
+
+describe("buildExportText with multi-set reps", () => {
+  it("outputs comma-separated reps when lastRepsSets is present", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", lastReps: 10, lastRepsSets: [10, 10, 10, 9], sets: 4 }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).toContain("Reps : 10, 10, 10, 9");
+  });
+
+  it("outputs a single number when lastRepsSets is absent", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", lastReps: 8, sets: 3 }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).toContain("Reps : 8");
+    expect(text).not.toContain(",");
+  });
+
+  it("round-trips multi-set reps through buildExportText → parseImportText", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", weight: 0, maxReps: 12, sets: 4, lastReps: 10, lastRepsSets: [10, 10, 10, 9] }),
+    ];
+    const text = buildExportText(exercises);
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].lastRepsSets).toEqual([10, 10, 10, 9]);
+    expect(result.exercises[0].sets).toBe(4);
+    expect(result.exercises[0].lastReps).toBe(10);
+  });
+});

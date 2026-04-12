@@ -17,6 +17,7 @@ export interface Session {
   id: number;
   startedAt: string;
   endedAt: string | null;
+  archived?: boolean;
 }
 
 export interface SessionSet {
@@ -251,6 +252,26 @@ export function endSession(id: number): Session {
 
 export function getSessionSets(sessionId: number): SessionSet[] {
   return load<SessionSet>(KEYS.sessionSets).filter((s) => s.sessionId === sessionId);
+}
+
+export function getAllSessionSets(): SessionSet[] {
+  return load<SessionSet>(KEYS.sessionSets);
+}
+
+export function archiveSession(id: number): void {
+  const sessions = getSessions();
+  save(KEYS.sessions, sessions.map((s) => s.id === id ? { ...s, archived: true } : s));
+}
+
+export function unarchiveSession(id: number): void {
+  const sessions = getSessions();
+  save(KEYS.sessions, sessions.map((s) => s.id === id ? { ...s, archived: false } : s));
+}
+
+/** Remove a session and its sets from storage without touching any exercise data. */
+export function deleteArchivedSession(id: number): void {
+  save(KEYS.sessions, getSessions().filter((s) => s.id !== id));
+  save(KEYS.sessionSets, load<SessionSet>(KEYS.sessionSets).filter((s) => s.sessionId !== id));
 }
 
 export function logSet(params: {

@@ -35,6 +35,7 @@ import {
   endSession,
   logSet,
   undoSet,
+  deleteSessionSetById,
   getAllSessionSets,
   archiveSession,
   unarchiveSession,
@@ -1187,15 +1188,14 @@ function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testId
   );
 }
 
-function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, loggedOrder, onTap, onTapSet, onUndoLastSet, settings }: {
+function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSet, onUndoSet, settings }: {
   exercise: Exercise;
   isActive: boolean;
   loggedReps: number | null;
   loggedRepsSets?: (number | null)[];
-  loggedOrder?: number[];
   onTap: (r: number) => void;
   onTapSet?: (i: number, r: number) => void;
-  onUndoLastSet?: () => void;
+  onUndoSet?: (i: number) => void;
   settings: Settings;
 }) {
   // Snapshot initial reference values on mount so that logging a set (which
@@ -1220,47 +1220,50 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, loggedOrder, o
 
   // Separate bars mode: one bar per set, each independently tappable
   const numBars = initialRefs.current.lastRepsSets?.length ?? exercise.sets;
-  const lastLoggedIdx = loggedOrder && loggedOrder.length > 0 ? loggedOrder[loggedOrder.length - 1] : -1;
+  const anyLogged = loggedRepsSets?.some((r) => r !== null) ?? false;
 
   return (
-    <div data-testid="rep-bar-multi">
-      {Array.from({ length: numBars }, (_, i) => {
-        const ref = initialRefs.current.lastRepsSets?.[i] ?? initialRefs.current.lastReps;
-        const setLogged = loggedRepsSets?.[i] ?? null;
-        const isLastLogged = i === lastLoggedIdx;
+    <>
+      <div data-testid="rep-bar-multi">
+        {Array.from({ length: numBars }, (_, i) => {
+          const ref = initialRefs.current.lastRepsSets?.[i] ?? initialRefs.current.lastReps;
+          const setLogged = loggedRepsSets?.[i] ?? null;
 
-        // Wrap the most-recently-logged bar in a tap-to-undo overlay (mirrors
-        // single-bar undo UX so users know they can reverse it).
-        if (setLogged !== null && isLastLogged && isActive && onUndoLastSet) {
+          // Every logged bar is tappable to undo it — same UX as single mode.
+          if (setLogged !== null && isActive && onUndoSet) {
+            return (
+              <div key={i} onClick={() => onUndoSet(i)} style={{ cursor: "pointer" }}
+                data-testid={`rep-bar-undo-set-${i}`}>
+                <RepBarRow
+                  maxReps={exercise.maxReps}
+                  referenceReps={ref}
+                  isActive={false}
+                  loggedReps={setLogged}
+                  onTap={() => {}}
+                  testIdSuffix={`-set-${i}`}
+                />
+              </div>
+            );
+          }
+
           return (
-            <div key={i} onClick={onUndoLastSet} style={{ cursor: "pointer" }}
-              data-testid={`rep-bar-undo-set-${i}`}>
-              <RepBarRow
-                maxReps={exercise.maxReps}
-                referenceReps={ref}
-                isActive={false}
-                loggedReps={setLogged}
-                onTap={() => {}}
-                testIdSuffix={`-set-${i}`}
-              />
-              <p className="undo-hint">Tap to undo</p>
-            </div>
+            <RepBarRow
+              key={i}
+              maxReps={exercise.maxReps}
+              referenceReps={ref}
+              isActive={isActive && setLogged === null}
+              loggedReps={setLogged}
+              onTap={(r) => onTapSet?.(i, r)}
+              testIdSuffix={`-set-${i}`}
+            />
           );
-        }
-
-        return (
-          <RepBarRow
-            key={i}
-            maxReps={exercise.maxReps}
-            referenceReps={ref}
-            isActive={isActive && setLogged === null}
-            loggedReps={setLogged}
-            onTap={(r) => onTapSet?.(i, r)}
-            testIdSuffix={`-set-${i}`}
-          />
-        );
-      })}
-    </div>
+        })}
+      </div>
+      {/* Single static hint below all bars — never causes layout shift */}
+      {isActive && anyLogged && onUndoSet && (
+        <p className="undo-hint">Tap bar to undo</p>
+      )}
+    </>
   );
 }
 
@@ -1532,6 +1535,15 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onTabSwitch: (cat: string) => void;
   settings: Settings;
 }) {
+  // Snapshot exercise reference values on mount so up/down comparison always
+  // uses the values from before this session's sets were logged (logSet()
+  // mutates exercise.lastReps in storage, which flows back via onExerciseChanged).
+  const exerciseInitRef = useRef({
+    lastReps: exercise.lastReps,
+    lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
+    weight: exercise.weight,
+  });
+
   // ── Single-bar mode state ─────────────────────────────────────────────────
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
   const [isDecline, setIsDecline] = useState(false);
@@ -1544,7 +1556,11 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(
     () => Array(exercise.sets).fill(null)
   );
-  // Track log order so we can undo LIFO (last-in, first-out)
+  // SessionSet IDs parallel to loggedRepsSets — used to delete a specific set on undo
+  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(
+    () => Array(exercise.sets).fill(null)
+  );
+  // Track log order (used for progress display only)
   const [loggedOrder, setLoggedOrder] = useState<number[]>([]);
   // Which set bar triggered the pending weight prompt
   const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
@@ -1556,24 +1572,27 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     : loggedRepsSets.every((r) => r !== null);
 
   // ── Outcome computation ───────────────────────────────────────────────────
-  // Single mode: compare reps vs exercise.lastReps (or total vs total for multi-set import).
+  // Single mode: compare reps vs original lastReps (snapshotted at mount to
+  // avoid corruption by logSet() mutating exercise.lastReps mid-session).
   const computeOutcomeForSingle = (reps: number, weight: number) => {
-    const prevTotal = exercise.lastRepsSets && exercise.lastRepsSets.length > 1
-      ? exercise.lastRepsSets.reduce((a, b) => a + b, 0)
-      : exercise.lastReps;
-    const currentReps = exercise.lastRepsSets && exercise.lastRepsSets.length > 1
+    const { lastReps, lastRepsSets } = exerciseInitRef.current;
+    const prevTotal = lastRepsSets && lastRepsSets.length > 1
+      ? lastRepsSets.reduce((a, b) => a + b, 0)
+      : lastReps;
+    const currentReps = lastRepsSets && lastRepsSets.length > 1
       ? reps * exercise.sets
       : reps;
-    return computeSetOutcome(currentReps, weight, prevTotal, exercise.weight);
+    return computeSetOutcome(currentReps, weight, prevTotal, exerciseInitRef.current.weight);
   };
 
   // Multi mode: compare total achieved reps vs total previous reps.
   const computeOutcomeForMulti = (completedSets: number[], weight: number) => {
+    const { lastReps, lastRepsSets } = exerciseInitRef.current;
     const totalCurrent = completedSets.reduce((a, b) => a + b, 0);
-    const prevTotal = exercise.lastRepsSets && exercise.lastRepsSets.length > 1
-      ? exercise.lastRepsSets.reduce((a, b) => a + b, 0)
-      : (exercise.lastReps !== null ? exercise.lastReps * exercise.sets : null);
-    return computeSetOutcome(totalCurrent, weight, prevTotal, exercise.weight);
+    const prevTotal = lastRepsSets && lastRepsSets.length > 1
+      ? lastRepsSets.reduce((a, b) => a + b, 0)
+      : (lastReps !== null ? lastReps * exercise.sets : null);
+    return computeSetOutcome(totalCurrent, weight, prevTotal, exerciseInitRef.current.weight);
   };
 
   // ── Single-bar commit & tap ───────────────────────────────────────────────
@@ -1612,7 +1631,8 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     const newSets = currentSets.map((r, i) => (i === setIndex ? reps : r));
     const newOrder = [...loggedOrder, setIndex];
     setLoggedOrder(newOrder);
-    logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
+    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
+    setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = created.id; return n; });
     onExerciseChanged();
     // When all sets are now logged, compute the final outcome and notify the parent
     if (newSets.every((r) => r !== null)) {
@@ -1647,16 +1667,17 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   };
 
   // Undo the most recently logged set (LIFO)
-  const handleUndoLastSet = () => {
-    if (!sessionId || loggedOrder.length === 0) return;
-    const lastSetIdx = loggedOrder[loggedOrder.length - 1];
+  // Undo a specific set bar — any logged bar can be tapped to clear it.
+  const handleUndoSet = (setIndex: number) => {
+    if (!sessionId || loggedRepsSets[setIndex] === null) return;
+    const setId = loggedSetIds[setIndex];
     const wasComplete = loggedRepsSets.every((r) => r !== null);
-    setLoggedRepsSets((prev) => { const n = [...prev]; n[lastSetIdx] = null; return n; });
-    setLoggedOrder((prev) => prev.slice(0, -1));
-    if (wasComplete) { setIsDecline(false); setIsUp(false); }
-    undoSet(sessionId, exercise.id);
+    setLoggedRepsSets((prev) => { const n = [...prev]; n[setIndex] = null; return n; });
+    setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = null; return n; });
+    setLoggedOrder((prev) => prev.filter((i) => i !== setIndex));
+    if (setId !== null) deleteSessionSetById(setId);
     onExerciseChanged();
-    if (wasComplete) onSetUndone(exercise.id);
+    if (wasComplete) { setIsDecline(false); setIsUp(false); onSetUndone(exercise.id); }
   };
 
   // ── Weight-prompt confirm (handles both single and multi mode) ────────────
@@ -1750,12 +1771,12 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
           )}
 
           {isComplete && isDecline && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
+            <span data-testid="badge-down" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
               <IconDecline /> Down
             </span>
           )}
           {isComplete && isUp && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+            <span data-testid="badge-up" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
               <IconUp /> Up
             </span>
           )}
@@ -1786,10 +1807,9 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
             isActive={isActive}
             loggedReps={null}
             loggedRepsSets={loggedRepsSets}
-            loggedOrder={loggedOrder}
             onTap={() => {}}
             onTapSet={handleRepTapSet}
-            onUndoLastSet={handleUndoLastSet}
+            onUndoSet={handleUndoSet}
             settings={settings}
           />
         )}

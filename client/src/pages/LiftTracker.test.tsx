@@ -712,7 +712,7 @@ describe("separate bars mode", () => {
     expect(screen.getByTestId("session-counter").textContent).toContain("1");
   });
 
-  it("undo-last-set button reverts the most recently logged bar", async () => {
+  it("tapping a logged bar reverts it (last bar logged)", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
@@ -730,7 +730,7 @@ describe("separate bars mode", () => {
     await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
     await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
 
-    // Undo last (bar 1) by tapping the undo wrapper on the last logged bar
+    // Undo bar 1 by tapping its undo wrapper
     await user.click(screen.getByTestId("rep-bar-undo-set-1"));
 
     // Bar 1 should now be unlogged (not filled), bar 0 still filled
@@ -738,6 +738,103 @@ describe("separate bars mode", () => {
     const bar1Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-1-8");
     expect(bar0Sq8.className).toContain("filled");
     expect(bar1Sq8.className).not.toContain("filled");
+  });
+
+  it("tapping a non-last logged bar reverts only that bar", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Log bar 0 then bar 1
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+
+    // Undo bar 0 (NOT the last logged bar)
+    await user.click(screen.getByTestId("rep-bar-undo-set-0"));
+
+    // Bar 0 should be unlogged, bar 1 should still be filled
+    const bar0Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-0-8");
+    const bar1Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-1-8");
+    expect(bar0Sq8.className).not.toContain("filled");
+    expect(bar1Sq8.className).toContain("filled");
+  });
+
+  it("up badge shows when total reps logged exceeds previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 9+9+9=27 should be Up
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-9"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-9"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-9"));
+
+    expect(screen.getByTestId("badge-up")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
+  });
+
+  it("down badge shows when total reps logged is less than previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 7+7+7=21 should be Down
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-7"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-7"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-7"));
+
+    expect(screen.getByTestId("badge-down")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+  });
+
+  it("no up/down badge when total reps equal previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 8+8+8=24 → neither Up nor Down
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-8"));
+
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
   });
 });
 

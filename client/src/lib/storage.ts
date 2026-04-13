@@ -324,6 +324,12 @@ export function saveSettings(settings: Settings): void {
   localStorage.setItem(KEYS.settings, JSON.stringify(settings));
 }
 
+/** Remove a specific SessionSet by ID without touching exercise.lastReps. */
+export function deleteSessionSetById(id: number): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  save(KEYS.sessionSets, sets.filter((s) => s.id !== id));
+}
+
 export function undoSet(sessionId: number, exerciseId: number): void {
   const sets = load<SessionSet>(KEYS.sessionSets);
   // Find the most recent set for this exercise in this session

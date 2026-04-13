@@ -15,6 +15,7 @@ import {
   getSessionSets,
   getAllSessionSets,
   logSet,
+  logSetBulk,
   undoSet,
   archiveSession,
   unarchiveSession,
@@ -261,6 +262,119 @@ describe("logSet", () => {
     const ex = createExercise(makeExercise());
     logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
     expect(getSessionSets(s2.id).length).toBe(0);
+  });
+});
+
+// ─── logSet with setIndex ─────────────────────────────────────────────────────
+
+describe("logSet with setIndex", () => {
+  it("updates lastRepsSets[setIndex] to repsAchieved", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, setIndex: 1 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets?.[1]).toBe(9);
+  });
+
+  it("does not modify other indices of lastRepsSets", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10, setIndex: 2 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets?.[0]).toBe(8);
+    expect(updated?.lastRepsSets?.[1]).toBe(8);
+    expect(updated?.lastRepsSets?.[2]).toBe(10);
+  });
+
+  it("seeds lastRepsSets from nulls when no prior lastRepsSets exists", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, setIndex: 0 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toEqual([9, null, null]);
+  });
+
+  it("still updates exercise.lastReps when setIndex is provided", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 11, setIndex: 0 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastReps).toBe(11);
+  });
+
+  it("does not set lastRepsSets when setIndex is omitted", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toBeUndefined();
+  });
+
+  it("does not set lastRepsSets for a single-set exercise", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 1, lastReps: 8 }));
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10, setIndex: 0 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toBeUndefined();
+  });
+});
+
+// ─── logSetBulk ───────────────────────────────────────────────────────────────
+
+describe("logSetBulk", () => {
+  it("creates N SessionSet records", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    const sets = logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    expect(sets).toHaveLength(3);
+    expect(getSessionSets(session.id)).toHaveLength(3);
+  });
+
+  it("each created record has the correct repsAchieved and weight", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
+    const sets = logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 25, repsAchieved: 7, numSets: 3 });
+    expect(sets.every((s) => s.repsAchieved === 7)).toBe(true);
+    expect(sets.every((s) => s.weight === 25)).toBe(true);
+  });
+
+  it("snapshots prevLastReps from exercise.lastReps before the call", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 5 }));
+    const sets = logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 3 });
+    expect(sets.every((s) => s.prevLastReps === 5)).toBe(true);
+  });
+
+  it("updates exercise.lastReps to repsAchieved", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 5 }));
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastReps).toBe(9);
+  });
+
+  it("updates exercise.lastRepsSets to an array of N identical values", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 5 }));
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toEqual([9, 9, 9]);
+  });
+
+  it("does not set lastRepsSets when numSets is 1", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 1, lastReps: 5 }));
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 1 });
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toBeUndefined();
+  });
+
+  it("returns an empty array when numSets is 0", () => {
+    const session = startSession();
+    const ex = createExercise(makeExercise({ sets: 3, lastReps: 5 }));
+    const sets = logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 0 });
+    expect(sets).toHaveLength(0);
+    expect(getSessionSets(session.id)).toHaveLength(0);
   });
 });
 

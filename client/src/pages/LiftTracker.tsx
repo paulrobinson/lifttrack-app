@@ -34,6 +34,7 @@ import {
   startSession,
   endSession,
   logSet,
+  logSetBulk,
   undoSet,
   deleteSessionSetById,
   getAllSessionSets,
@@ -1207,10 +1208,13 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
   });
 
   if (!settings.showSeparateBars) {
+    const referenceReps = initialRefs.current.lastRepsSets && initialRefs.current.lastRepsSets.length > 0
+      ? Math.min(...initialRefs.current.lastRepsSets)
+      : initialRefs.current.lastReps;
     return (
       <RepBarRow
         maxReps={exercise.maxReps}
-        referenceReps={exercise.lastReps}
+        referenceReps={referenceReps}
         isActive={isActive}
         loggedReps={loggedReps}
         onTap={onTap}
@@ -1546,6 +1550,8 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
   // ── Single-bar mode state ─────────────────────────────────────────────────
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
+  // IDs of all SessionSets created by logSetBulk — needed to delete all on undo
+  const singleModeSetIdsRef = useRef<number[]>([]);
   const [isDecline, setIsDecline] = useState(false);
   const [isUp, setIsUp] = useState(false);
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
@@ -1602,7 +1608,8 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     setLoggedReps(reps);
     setIsDecline(decline);
     setIsUp(up);
-    logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
+    const created = logSetBulk({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, numSets: exercise.sets });
+    singleModeSetIdsRef.current = created.map((s) => s.id);
     onExerciseChanged();
     onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets });
   };
@@ -1611,7 +1618,9 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     if (!isActive || !sessionId) return;
     if (loggedReps !== null) {
       setLoggedReps(null); setIsDecline(false); setIsUp(false);
-      undoSet(sessionId, exercise.id);
+      singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id));
+      singleModeSetIdsRef.current = [];
+      updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets });
       onExerciseChanged();
       onSetUndone(exercise.id);
       return;
@@ -1631,7 +1640,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     const newSets = currentSets.map((r, i) => (i === setIndex ? reps : r));
     const newOrder = [...loggedOrder, setIndex];
     setLoggedOrder(newOrder);
-    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
+    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, setIndex });
     setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = created.id; return n; });
     onExerciseChanged();
     // When all sets are now logged, compute the final outcome and notify the parent
@@ -1699,9 +1708,9 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
       // Single mode
       if (showWeightPrompt === "increase") {
         commitLog(pendingReps!, exercise.weight);
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null });
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
       } else {
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null });
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
       }
       onExerciseChanged();
       setPendingReps(null);
@@ -1791,7 +1800,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         {/* Rep bar — single mode */}
         {isSingleMode && (
           loggedReps !== null && isActive && showWeightPrompt === null ? (
-            <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
+            <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id)); singleModeSetIdsRef.current = []; updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets }); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
               <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} settings={settings} />
               <p className="undo-hint">Tap bar to undo</p>
             </div>

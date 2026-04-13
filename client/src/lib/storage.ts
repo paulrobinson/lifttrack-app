@@ -291,21 +291,74 @@ export function logSet(params: {
   exerciseId: number;
   weight: number;
   repsAchieved: number;
+  setIndex?: number;
 }): SessionSet {
+  const { setIndex, ...setParams } = params;
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
 
   const set: SessionSet = {
     id: nextId(),
-    ...params,
+    ...setParams,
     prevLastReps: ex.lastReps,
   };
 
-  updateExercise(params.exerciseId, { lastReps: params.repsAchieved });
+  const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
+  if (setIndex !== undefined && ex.sets > 1) {
+    const prev = ex.lastRepsSets && ex.lastRepsSets.length === ex.sets
+      ? [...ex.lastRepsSets]
+      : Array(ex.sets).fill(null);
+    prev[setIndex] = params.repsAchieved;
+    updates.lastRepsSets = prev;
+  }
+  updateExercise(params.exerciseId, updates);
 
   const sets = load<SessionSet>(KEYS.sessionSets);
   save(KEYS.sessionSets, [...sets, set]);
   return set;
+}
+
+/**
+ * Log N identical sets in one call (single-bar mode).
+ * Creates one SessionSet per set index and updates both exercise.lastReps
+ * and exercise.lastRepsSets atomically.
+ */
+export function logSetBulk(params: {
+  sessionId: number;
+  exerciseId: number;
+  weight: number;
+  repsAchieved: number;
+  numSets: number;
+}): SessionSet[] {
+  const exercises = getExercises();
+  const ex = exercises.find((e) => e.id === params.exerciseId)!;
+  const prevLastReps = ex.lastReps;
+
+  const newSets: SessionSet[] = [];
+  const allSets = load<SessionSet>(KEYS.sessionSets);
+
+  for (let i = 0; i < params.numSets; i++) {
+    const set: SessionSet = {
+      id: nextId(),
+      sessionId: params.sessionId,
+      exerciseId: params.exerciseId,
+      weight: params.weight,
+      repsAchieved: params.repsAchieved,
+      prevLastReps,
+    };
+    newSets.push(set);
+    allSets.push(set);
+  }
+
+  save(KEYS.sessionSets, allSets);
+
+  const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
+  if (params.numSets > 1) {
+    updates.lastRepsSets = Array(params.numSets).fill(params.repsAchieved);
+  }
+  updateExercise(params.exerciseId, updates);
+
+  return newSets;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────

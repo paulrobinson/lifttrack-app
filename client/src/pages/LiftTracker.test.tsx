@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -951,6 +951,113 @@ describe("session log panel", () => {
     await user.click(screen.getByTestId(`btn-delete-session-confirm-${session.id}`));
     const stored = getExercises().find((e) => e.id === ex.id);
     expect(stored?.lastReps).toBe(12);
+  });
+});
+
+// ─── Single-bar mode: unified storage model ───────────────────────────────────
+
+describe("single-bar mode: per-set storage", () => {
+  it("logging in single mode creates one SessionSet per exercise set", async () => {
+    const user = userEvent.setup();
+    // sets=3, single-bar mode (default)
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    const session = getActiveSession()!;
+    const sets = getSessionSets(session.id);
+    // Expect 3 SessionSets (one per set), not 1
+    expect(sets.filter((s) => s.repsAchieved === 9)).toHaveLength(3);
+  });
+
+  it("all created SessionSets have the same repsAchieved value", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-7"));
+
+    const session = getActiveSession()!;
+    const sets = getSessionSets(session.id);
+    expect(sets.every((s) => s.repsAchieved === 7)).toBe(true);
+  });
+
+  it("exercise.lastRepsSets is populated after single-mode logging", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toEqual([9, 9, 9]);
+  });
+
+  it("undo in single mode removes all N created SessionSets", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    // Tap bar again to undo (inline undo div)
+    const undoBar = screen.getAllByTestId("rep-bar")[0];
+    await user.click(undoBar);
+
+    const session = getActiveSession()!;
+    expect(getSessionSets(session.id)).toHaveLength(0);
+  });
+
+  it("undo in single mode restores exercise.lastReps and lastRepsSets to pre-session values", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    // Tap bar wrapper to undo
+    await user.click(screen.getAllByTestId("rep-bar")[0]);
+
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastReps).toBe(8);
+    expect(updated?.lastRepsSets).toEqual([8, 8, 8]);
+  });
+
+  it("single mode reference bar shows minimum of mixed previous per-set reps", async () => {
+    const user = userEvent.setup();
+    // lastRepsSets=[10, 8, 9] → min is 8; reference bar should have 8 squares filled
+    createExercise(makeExercise({
+      name: "Pull Ups",
+      category: "Back",
+      sets: 3,
+      maxReps: 12,
+      lastReps: 10,
+      lastRepsSets: [10, 8, 9],
+    }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+
+    // In single mode, rep-square-8 should be "reference" state, rep-square-9 should be "empty"
+    const repBars = screen.getAllByTestId("rep-bar");
+    const bar = repBars[0];
+    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
+    expect(within(bar).getByTestId("rep-square-9").className).not.toContain("reference");
   });
 });
 

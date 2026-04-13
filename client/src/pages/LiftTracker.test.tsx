@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1058,6 +1058,90 @@ describe("single-bar mode: per-set storage", () => {
     const bar = repBars[0];
     expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
     expect(within(bar).getByTestId("rep-square-9").className).not.toContain("reference");
+  });
+});
+
+// ─── Mode-switch mid-exercise ─────────────────────────────────────────────────
+
+describe("mode switch mid-exercise", () => {
+  it("separate→single: a fully-logged exercise stays green (done-check visible)", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    // Start in separate bars mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-1-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-2-9"));
+
+    // All sets logged → done-check should be visible
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+
+    // Switch to single mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Exercise should still appear complete (not go grey)
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+  });
+
+  it("separate→single: partial exercise still shows reference bar", async () => {
+    const user = userEvent.setup();
+    // lastReps=8 for all sets, logging only set 0 with 9 reps
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // Log only the first set
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+
+    // Switch to single mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Reference bar (square 8) should be visible — NOT empty
+    const bar = screen.getAllByTestId("rep-bar")[0];
+    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
+  });
+
+  it("single→separate: a logged exercise stays complete (done-check visible)", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // Log in single mode
+    const bars = screen.getAllByTestId("rep-bar");
+    await user.click(within(bars[0]).getByTestId("rep-square-9"));
+
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+
+    // Switch to separate bars mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Exercise should still appear complete
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
   });
 });
 

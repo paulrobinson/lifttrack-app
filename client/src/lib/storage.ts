@@ -307,7 +307,7 @@ export function logSet(params: {
   if (setIndex !== undefined && ex.sets > 1) {
     const prev = ex.lastRepsSets && ex.lastRepsSets.length === ex.sets
       ? [...ex.lastRepsSets]
-      : Array(ex.sets).fill(null);
+      : Array(ex.sets).fill(ex.lastReps); // seed unlogged positions with pre-session value
     prev[setIndex] = params.repsAchieved;
     updates.lastRepsSets = prev;
   }

@@ -286,12 +286,14 @@ describe("logSet with setIndex", () => {
     expect(updated?.lastRepsSets?.[2]).toBe(10);
   });
 
-  it("seeds lastRepsSets from nulls when no prior lastRepsSets exists", () => {
+  it("seeds unlogged positions from exercise.lastReps when no prior lastRepsSets exists", () => {
     const session = startSession();
     const ex = createExercise(makeExercise({ sets: 3, lastReps: 8 }));
     logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, setIndex: 0 });
     const updated = getExercises().find((e) => e.id === ex.id);
-    expect(updated?.lastRepsSets).toEqual([9, null, null]);
+    // Unlogged positions get the pre-session lastReps value (8), not null,
+    // so the reference bar in single mode always has valid data to min() over.
+    expect(updated?.lastRepsSets).toEqual([9, 8, 8]);
   });
 
   it("still updates exercise.lastReps when setIndex is provided", () => {

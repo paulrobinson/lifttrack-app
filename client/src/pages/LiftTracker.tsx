@@ -1208,8 +1208,9 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
   });
 
   if (!settings.showSeparateBars) {
-    const referenceReps = initialRefs.current.lastRepsSets && initialRefs.current.lastRepsSets.length > 0
-      ? Math.min(...initialRefs.current.lastRepsSets)
+    const validRefs = (initialRefs.current.lastRepsSets ?? []).filter((v): v is number => v != null);
+    const referenceReps = validRefs.length > 0
+      ? Math.min(...validRefs)
       : initialRefs.current.lastReps;
     return (
       <RepBarRow
@@ -1576,6 +1577,33 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const isComplete = isSingleMode
     ? loggedReps !== null
     : loggedRepsSets.every((r) => r !== null);
+
+  // ── Mode-switch sync ──────────────────────────────────────────────────────
+  // When the user toggles "Show sets as separate bars" mid-exercise, sync the
+  // other mode's state so completion badges and bars remain consistent.
+  // Refs hold latest state values so the effect closure is always fresh.
+  const loggedRepsRef = useRef(loggedReps);
+  loggedRepsRef.current = loggedReps;
+  const loggedRepsSetsRef = useRef(loggedRepsSets);
+  loggedRepsSetsRef.current = loggedRepsSets;
+  const loggedSetIdsRef = useRef(loggedSetIds);
+  loggedSetIdsRef.current = loggedSetIds;
+  useEffect(() => {
+    if (isSingleMode) {
+      // Separate → single: promote completed multi-mode state into loggedReps
+      if (loggedRepsSetsRef.current.every((r) => r !== null)) {
+        setLoggedReps(Math.min(...(loggedRepsSetsRef.current as number[])));
+        singleModeSetIdsRef.current = loggedSetIdsRef.current.filter((id): id is number => id !== null);
+      }
+    } else {
+      // Single → separate: fill all set bars from loggedReps
+      if (loggedRepsRef.current !== null) {
+        setLoggedRepsSets(Array(exercise.sets).fill(loggedRepsRef.current));
+        setLoggedSetIds([...singleModeSetIdsRef.current]);
+        setLoggedOrder(Array.from({ length: exercise.sets }, (_, i) => i));
+      }
+    }
+  }, [isSingleMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Outcome computation ───────────────────────────────────────────────────
   // Single mode: compare reps vs original lastReps (snapshotted at mount to

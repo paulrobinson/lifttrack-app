@@ -33,7 +33,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin previews || true
           if git rev-parse --verify origin/previews >/dev/null 2>&1; then
-            git checkout previews
+            git checkout -B previews origin/previews
           else
             git checkout --orphan previews
             git rm -rf . || true

@@ -38,6 +38,7 @@ import {
   undoSet,
   deleteSessionSetById,
   getAllSessionSets,
+  getSessionSets,
   archiveSession,
   unarchiveSession,
   deleteArchivedSession,
@@ -1560,35 +1561,71 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onFavouriteToggle: () => void;
   settings: Settings;
 }) {
-  // Snapshot exercise reference values on mount so up/down comparison always
-  // uses the values from before this session's sets were logged (logSet()
-  // mutates exercise.lastReps in storage, which flows back via onExerciseChanged).
+  // ── Restore state on remount ──────────────────────────────────────────────
+  // Switching tabs unmounts and remounts exercise cards, losing local state.
+  // Seed state from the session's stored sets so the card looks correct when
+  // the user returns to a tab mid-session.
+  const [preloadedSets] = useState<SessionSet[]>(() => {
+    if (!sessionId) return [];
+    return getSessionSets(sessionId).filter((s) => s.exerciseId === exercise.id);
+  });
+  const wasLogged = preloadedSets.length > 0;
+
+  // Snapshot exercise reference values. If already logged this session,
+  // exercise.lastReps has been mutated — recover the genuine pre-session value
+  // from prevLastReps stored in the first session set.
   const exerciseInitRef = useRef({
-    lastReps: exercise.lastReps,
+    lastReps: wasLogged ? preloadedSets[0].prevLastReps : exercise.lastReps,
     lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
     weight: exercise.weight,
   });
 
   // ── Single-bar mode state ─────────────────────────────────────────────────
-  const [loggedReps, setLoggedReps] = useState<number | null>(null);
+  const [loggedReps, setLoggedReps] = useState<number | null>(
+    wasLogged ? preloadedSets[preloadedSets.length - 1].repsAchieved : null
+  );
   // IDs of all SessionSets created by logSetBulk — needed to delete all on undo
-  const singleModeSetIdsRef = useRef<number[]>([]);
-  const [isDecline, setIsDecline] = useState(false);
-  const [isUp, setIsUp] = useState(false);
+  const singleModeSetIdsRef = useRef<number[]>(
+    wasLogged ? preloadedSets.map((s) => s.id) : []
+  );
+
+  const [isDecline, setIsDecline] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr < prev;
+  });
+  const [isUp, setIsUp] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr > prev;
+  });
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
   // ── Multi-bar mode state (separate bars setting) ──────────────────────────
-  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
+  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    // Best-effort: assign sets to bars in chronological order (setIndex is not
+    // persisted in SessionSet, so exact bar positions cannot be fully recovered).
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.repsAchieved; });
+    return slots;
+  });
   // SessionSet IDs parallel to loggedRepsSets — used to delete a specific set on undo
-  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
+  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.id; });
+    return slots;
+  });
   // Track log order (used for progress display only)
-  const [loggedOrder, setLoggedOrder] = useState<number[]>([]);
+  const [loggedOrder, setLoggedOrder] = useState<number[]>(() => {
+    if (!wasLogged) return [];
+    return Array.from({ length: Math.min(preloadedSets.length, exercise.sets) }, (_, i) => i);
+  });
   // Which set bar triggered the pending weight prompt
   const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
 

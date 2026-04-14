@@ -685,7 +685,7 @@ function IconUp() {
 
 function IconEdit() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     </svg>
   );
@@ -740,7 +740,7 @@ function IconSettings() {
 
 function IconStarFilled() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
@@ -748,7 +748,7 @@ function IconStarFilled() {
 
 function IconStarEmpty() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
@@ -1793,7 +1793,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         className={`exercise-card ${cardState} ${isArchived ? "archived-card" : ""}`}
         data-testid={`exercise-card-${exercise.id}`}
       >
-        {/* Row 1: name + sets label inline + favourite star + edit */}
+        {/* Row 1: name + sets label + edit + star (furthest right) */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
           <h2 style={{ fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.2, minWidth: 0 }} data-testid="exercise-name">
             {exercise.name}
@@ -1802,30 +1802,16 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
             ×{exercise.sets}
           </span>
           <div style={{ flex: 1 }} />
-          <button
-            onClick={(e) => { e.stopPropagation(); onFavouriteToggle(); }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px 3px",
-              color: exercise.isFavourite ? "hsl(45 90% 55%)" : "var(--color-text-faint)",
-              flexShrink: 0,
-              opacity: exercise.isFavourite ? 1 : 0.5,
-              transition: "color 150ms ease, opacity 150ms ease",
-            }}
-            aria-label={exercise.isFavourite ? "Remove from favourites" : "Add to favourites"}
-            data-testid="btn-favourite"
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = exercise.isFavourite ? "hsl(45 90% 55%)" : "hsl(45 90% 55%)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = exercise.isFavourite ? "1" : "0.5"; e.currentTarget.style.color = exercise.isFavourite ? "hsl(45 90% 55%)" : "var(--color-text-faint)"; }}
-          >
-            {exercise.isFavourite ? <IconStarFilled /> : <IconStarEmpty />}
-          </button>
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onFavouriteToggle(); }}
+            className={`btn-favourite${exercise.isFavourite ? " is-favourite" : ""}`}
+            aria-label={exercise.isFavourite ? "Remove from favourites" : "Add to favourites"}
+            data-testid="btn-favourite"
+          >
+            {exercise.isFavourite ? <IconStarFilled /> : <IconStarEmpty />}
           </button>
         </div>
 
@@ -2246,17 +2232,15 @@ export default function LiftTracker() {
 
         {/* Tab bar */}
         <div className="tab-bar" data-testid="tab-bar">
-          {/* Favourites tab — always shown first */}
+          {/* Favourites tab — always shown first, star only */}
           <button
             className={`tab-btn ${activeTab === FAVOURITES_TAB ? "active-tab" : ""}`}
             onClick={() => setActiveTab(FAVOURITES_TAB)}
             data-testid="tab-favourites"
-            style={{ display: "flex", alignItems: "center", gap: "4px" }}
+            title="Favourites"
+            style={{ display: "inline-flex", alignItems: "center", color: activeTab === FAVOURITES_TAB ? "hsl(45 90% 55%)" : "hsl(45 90% 45%)" }}
           >
-            <span style={{ color: activeTab === FAVOURITES_TAB ? "hsl(45 90% 55%)" : "hsl(45 90% 45%)", display: "inline-flex" }}>
-              <IconStarFilled />
-            </span>
-            Favourites
+            <IconStarFilled />
           </button>
           {allCategories.map((cat) => (
             <button

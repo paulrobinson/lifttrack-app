@@ -53,7 +53,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deploy.yml',
-              ref: 'main'
+              ref: '${{ github.head_ref }}'
             });
 
       - name: Post comment with preview URL

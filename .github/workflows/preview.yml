@@ -26,18 +26,24 @@ jobs:
         env:
           VITE_STORAGE_PREFIX: preview_pr${{ github.event.number }}_
 
-      - name: Copy built output into preview folder on main
+      - name: Copy built output into preview folder on previews branch
         run: |
           cp -r dist/public /tmp/pr-preview
-          git fetch origin main
-          git checkout main
-          mkdir -p previews/pr-${{ github.event.number }}
-          rsync -av --delete /tmp/pr-preview/ previews/pr-${{ github.event.number }}/
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin previews || true
+          if git rev-parse --verify origin/previews >/dev/null 2>&1; then
+            git checkout previews
+          else
+            git checkout --orphan previews
+            git rm -rf . || true
+            git commit --allow-empty -m "Init previews branch"
+          fi
+          mkdir -p previews/pr-${{ github.event.number }}
+          rsync -av --delete /tmp/pr-preview/ previews/pr-${{ github.event.number }}/
           git add previews/
           git commit -m "Preview for PR #${{ github.event.number }}" || echo "No changes"
-          git push origin main
+          git push origin previews
 
       - name: Trigger Pages deployment
         uses: actions/github-script@v7
@@ -85,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: previews
 
       - name: Remove preview folder
         run: |
@@ -93,7 +99,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git rm -rf previews/pr-${{ github.event.number }} || echo "Nothing to remove"
           git commit -m "Remove preview for PR #${{ github.event.number }}" || echo "No changes"
-          git push origin main
+          git push origin previews
 
       - name: Trigger Pages deployment
         uses: actions/github-script@v7

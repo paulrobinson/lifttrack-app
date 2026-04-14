@@ -5,14 +5,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   type Exercise,
+  type SessionSet,
   type Settings,
   updateExercise,
   deleteExercise,
   logSet,
   logSetBulk,
   deleteSessionSetById,
+  getSessionSets,
 } from "@/lib/storage";
-import { IconCheck, IconDecline, IconUp, IconEdit } from "./icons";
+import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
 import type { SetLog } from "./types";
 
@@ -181,7 +183,7 @@ function WeightPrompt({ label, onConfirm, onCancel }: {
 
 // ─── Exercise Card ──────────────────────────────────────────────────────────────
 
-export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
+export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
   exercise: Exercise;
   isActive: boolean;
   sessionId: number | null;
@@ -189,31 +191,65 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  onFavouriteToggle: () => void;
   settings: Settings;
 }) {
+  // ── Restore state on remount ──────────────────────────────────────────────
+  // Switching tabs unmounts and remounts exercise cards, losing local state.
+  // Seed state from the session's stored sets so the card looks correct when
+  // the user returns to a tab mid-session.
+  const [preloadedSets] = useState<SessionSet[]>(() => {
+    if (!sessionId) return [];
+    return getSessionSets(sessionId).filter((s) => s.exerciseId === exercise.id);
+  });
+  const wasLogged = preloadedSets.length > 0;
+
   const exerciseInitRef = useRef({
-    lastReps: exercise.lastReps,
+    lastReps: wasLogged ? preloadedSets[0].prevLastReps : exercise.lastReps,
     lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
     weight: exercise.weight,
   });
 
   // ── Single-bar mode state
-  const [loggedReps, setLoggedReps] = useState<number | null>(null);
-  const singleModeSetIdsRef = useRef<number[]>([]);
-  const [isDecline, setIsDecline] = useState(false);
-  const [isUp, setIsUp] = useState(false);
+  const [loggedReps, setLoggedReps] = useState<number | null>(
+    wasLogged ? preloadedSets[preloadedSets.length - 1].repsAchieved : null
+  );
+  const singleModeSetIdsRef = useRef<number[]>(
+    wasLogged ? preloadedSets.map((s) => s.id) : []
+  );
+  const [isDecline, setIsDecline] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr < prev;
+  });
+  const [isUp, setIsUp] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr > prev;
+  });
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
   // ── Multi-bar mode state
-  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
-  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
-  const [loggedOrder, setLoggedOrder] = useState<number[]>([]);
+  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.repsAchieved; });
+    return slots;
+  });
+  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.id; });
+    return slots;
+  });
+  const [loggedOrder, setLoggedOrder] = useState<number[]>(() => {
+    if (!wasLogged) return [];
+    return Array.from({ length: Math.min(preloadedSets.length, exercise.sets) }, (_, i) => i);
+  });
   const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
 
   // ── Derived
@@ -413,6 +449,14 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
           </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onFavouriteToggle(); }}
+            className={`btn-favourite${exercise.isFavourite ? " is-favourite" : ""}`}
+            aria-label={exercise.isFavourite ? "Remove from favourites" : "Add to favourites"}
+            data-testid="btn-favourite"
+          >
+            {exercise.isFavourite ? <IconStarFilled /> : <IconStarEmpty />}
+          </button>
         </div>
 
         {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
@@ -529,7 +573,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
 // ─── Sortable Exercise Card Wrapper ─────────────────────────────────────────────
 
-export function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
+export function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
   exercise: Exercise;
   isReordering: boolean;
   isDropped: boolean;
@@ -539,6 +583,7 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  onFavouriteToggle: () => void;
   settings: Settings;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
@@ -569,6 +614,7 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
           onSetUndone={onSetUndone}
           onExerciseChanged={onExerciseChanged}
           onTabSwitch={onTabSwitch}
+          onFavouriteToggle={onFavouriteToggle}
           settings={settings}
         />
       </div>

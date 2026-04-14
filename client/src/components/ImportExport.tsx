@@ -127,7 +127,9 @@ export function buildExportText(exercises: Exercise[]): string {
 // ─── Encode / Decode state string ───────────────────────────────────────────────
 
 export async function encodeState(exercises: Exercise[]): Promise<string> {
-  const json = JSON.stringify(exercises);
+  // Strip isFavourite — favourite status is not exported
+  const sanitized = exercises.map(({ isFavourite: _fav, ...rest }) => rest);
+  const json = JSON.stringify(sanitized);
   const bytes = new TextEncoder().encode(json);
   const cs = new CompressionStream("gzip");
   const writer = cs.writable.getWriter();

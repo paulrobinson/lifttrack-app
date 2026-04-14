@@ -13,6 +13,7 @@ export interface Exercise {
   tempo?: string;
   sortOrder: number;
   archived: boolean;
+  isFavourite?: boolean;
 }
 
 export interface Settings {

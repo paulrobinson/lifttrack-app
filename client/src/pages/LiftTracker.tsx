@@ -25,6 +25,7 @@ import {
   getActiveSession,
   startSession,
   endSession,
+  updateExercise,
   getCategories,
   addCategory,
   deleteCategory,
@@ -32,7 +33,7 @@ import {
   saveSettings,
 } from "@/lib/storage";
 
-import { IconPlus, IconArchive, IconLog, IconSettings, IconTrash } from "@/components/icons";
+import { IconPlus, IconArchive, IconLog, IconSettings, IconTrash, IconStarFilled } from "@/components/icons";
 import { Modal, cancelBtnStyle } from "@/components/Modal";
 import { ImportButton, ExportModal } from "@/components/ImportExport";
 import { SessionHistoryPanel } from "@/components/SessionHistory";
@@ -49,6 +50,7 @@ export type { HistoryExerciseEntry, HistorySessionEntry } from "@/components/Ses
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const ARCHIVE_TAB = "Archive";
+const FAVOURITES_TAB = "Favourites";
 
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
@@ -184,10 +186,11 @@ export default function LiftTracker() {
     }
   });
 
-  const filteredExercises = (activeTab === ARCHIVE_TAB
-    ? archivedExercises
-    : activeExercises.filter((ex) => ex.category === activeTab))
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const filteredExercises = (() => {
+    if (activeTab === ARCHIVE_TAB) return archivedExercises.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    if (activeTab === FAVOURITES_TAB) return activeExercises.filter((ex) => ex.isFavourite).sort((a, b) => a.category.localeCompare(b.category) || a.sortOrder - b.sortOrder);
+    return activeExercises.filter((ex) => ex.category === activeTab).sort((a, b) => a.sortOrder - b.sortOrder);
+  })();
 
   return (
     <div style={{ minHeight: "100dvh" }}>
@@ -290,6 +293,16 @@ export default function LiftTracker() {
         )}
 
         <div className="tab-bar" data-testid="tab-bar">
+          {/* Favourites tab — always shown first, star only */}
+          <button
+            className={`tab-btn ${activeTab === FAVOURITES_TAB ? "active-tab" : ""}`}
+            onClick={() => setActiveTab(FAVOURITES_TAB)}
+            data-testid="tab-favourites"
+            title="Favourites"
+            style={{ display: "inline-flex", alignItems: "center", color: activeTab === FAVOURITES_TAB ? "hsl(45 90% 55%)" : "hsl(45 90% 45%)" }}
+          >
+            <IconStarFilled />
+          </button>
           {allCategories.map((cat) => (
             <button
               key={cat}
@@ -336,9 +349,18 @@ export default function LiftTracker() {
         {filteredExercises.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--color-text-faint)" }}>
             <p style={{ fontSize: "var(--text-sm)" }}>
-              {activeTab === ARCHIVE_TAB ? "No archived exercises." : `No exercises in ${activeTab} yet.`}
+              {activeTab === ARCHIVE_TAB
+                ? "No archived exercises."
+                : activeTab === FAVOURITES_TAB
+                  ? "No favourite exercises yet."
+                  : `No exercises in ${activeTab} yet.`}
             </p>
-            {activeTab !== ARCHIVE_TAB && (
+            {activeTab === FAVOURITES_TAB && (
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", marginTop: "10px", lineHeight: 1.6 }}>
+                Tap the ☆ star on any exercise to add it here.
+              </p>
+            )}
+            {activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
               confirmRemoveGroup ? (
                 <div style={{ marginTop: "14px", display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
                   <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Remove this group?</span>
@@ -379,6 +401,22 @@ export default function LiftTracker() {
               onSetUndone={handleSetUndone}
               onExerciseChanged={refreshExercises}
               onTabSwitch={setActiveTab}
+              onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
+              settings={settings}
+            />
+          ))
+        ) : activeTab === FAVOURITES_TAB ? (
+          filteredExercises.map((ex) => (
+            <ExerciseCard
+              key={`${ex.id}-${activeSession?.id ?? "idle"}`}
+              exercise={ex}
+              isActive={isActive}
+              sessionId={activeSession?.id ?? null}
+              onSetLogged={handleSetLogged}
+              onSetUndone={handleSetUndone}
+              onExerciseChanged={refreshExercises}
+              onTabSwitch={setActiveTab}
+              onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
               settings={settings}
             />
           ))
@@ -405,6 +443,7 @@ export default function LiftTracker() {
                   onSetUndone={handleSetUndone}
                   onExerciseChanged={refreshExercises}
                   onTabSwitch={setActiveTab}
+                  onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
                   settings={settings}
                 />
               ))}
@@ -412,7 +451,7 @@ export default function LiftTracker() {
           </DndContext>
         )}
 
-        {activeTab !== ARCHIVE_TAB && (
+        {activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
           <button
             onClick={() => setShowAddSheet(true)}
             data-testid="btn-add-exercise"
@@ -440,7 +479,7 @@ export default function LiftTracker() {
           </button>
         )}
 
-        {!isActive && activeTab !== ARCHIVE_TAB && (
+        {!isActive && activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
           <p style={{ textAlign: "center", fontSize: "var(--text-xs)", color: "var(--color-text-faint)", marginTop: "4px" }}>
             Tap <strong style={{ color: "var(--color-success)" }}>Start</strong> to begin your session
           </p>
@@ -536,7 +575,7 @@ export default function LiftTracker() {
 
       {showAddSheet && (
         <ExerciseSheet
-          defaultCategory={activeTab !== ARCHIVE_TAB ? activeTab : undefined}
+          defaultCategory={activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB ? activeTab : undefined}
           onSave={handleAddExercise}
           onClose={() => setShowAddSheet(false)}
         />

@@ -30,8 +30,9 @@ jobs:
 
       - name: Include PR previews
         run: |
-          if [ -d previews ]; then
-            cp -r previews dist/public/previews
+          git fetch origin previews || true
+          if git rev-parse --verify origin/previews >/dev/null 2>&1; then
+            git checkout origin/previews -- previews/ 2>/dev/null && cp -r previews dist/public/previews || echo "No previews to include"
           fi
 
       - uses: actions/upload-pages-artifact@v3

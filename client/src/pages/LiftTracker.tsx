@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   MouseSensor,
@@ -20,6 +20,7 @@ import {
   type Exercise,
   type Session,
   type SessionSet,
+  type Settings,
   initStorage,
   resetExercises,
   replaceExercises,
@@ -33,7 +34,9 @@ import {
   startSession,
   endSession,
   logSet,
+  logSetBulk,
   undoSet,
+  deleteSessionSetById,
   getAllSessionSets,
   archiveSession,
   unarchiveSession,
@@ -41,6 +44,8 @@ import {
   getCategories,
   addCategory,
   deleteCategory,
+  getSettings,
+  saveSettings,
 } from "@/lib/storage";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -151,15 +156,19 @@ export function parseImportText(text: string): ParseResult {
     const maxReps = parseInt(fields["max reps"]);
     // Weight: strip non-numeric suffixes ("60kg" -> 60), handle "0" for bodyweight
     const weight = parseFloat(fields["weight"].replace(/[^\d.]/g, "") || "0");
-    const sets = parseInt(fields["sets"]);
-    // Reps might be "8" or "8, 8, 8" or "8, 6" — take the first number
-    const repsRaw = fields["reps"].split(/[,\s]+/)[0];
-    const lastReps = parseInt(repsRaw);
+    const parsedSets = parseInt(fields["sets"]);
+    // Reps may be a single value "8" or per-set values "10, 10, 10, 9"
+    const repValues = fields["reps"].split(/,/).map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
     if (isNaN(maxReps)) return fail(blockStart, `"max reps" value "${fields["max reps"]}" is not a number.`);
     if (isNaN(weight)) return fail(blockStart, `"weight" value "${fields["weight"]}" is not a number.`);
-    if (isNaN(sets))   return fail(blockStart, `"sets" value "${fields["sets"]}" is not a number.`);
-    if (isNaN(lastReps)) return fail(blockStart, `"reps" value "${fields["reps"]}" could not be parsed as a number.`);
+    if (isNaN(parsedSets))   return fail(blockStart, `"sets" value "${fields["sets"]}" is not a number.`);
+    if (repValues.length === 0) return fail(blockStart, `"reps" value "${fields["reps"]}" could not be parsed as a number.`);
+
+    const lastReps = repValues[0];
+    // When multiple per-set values are given, store them and use the count as the sets number
+    const lastRepsSets = repValues.length > 1 ? repValues : undefined;
+    const sets = lastRepsSets ? lastRepsSets.length : parsedSets;
 
     exercises.push({
       name,
@@ -168,6 +177,7 @@ export function parseImportText(text: string): ParseResult {
       maxReps,
       sets,
       lastReps,
+      ...(lastRepsSets ? { lastRepsSets } : {}),
       sortOrder: sortOrder++,
       archived: false,
     });
@@ -566,7 +576,10 @@ export function buildExportText(exercises: Exercise[]): string {
       lines.push(`Max reps : ${e.maxReps}`);
       lines.push(`Weight : ${e.weight}`);
       lines.push(`Sets : ${e.sets}`);
-      lines.push(`Reps : ${e.lastReps ?? "\u2013"}`);
+      const repsStr = e.lastRepsSets && e.lastRepsSets.length > 1
+        ? e.lastRepsSets.join(", ")
+        : String(e.lastReps ?? "\u2013");
+      lines.push(`Reps : ${repsStr}`);
       if (i < exs.length - 1) lines.push("\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014");
     });
     lines.push("");
@@ -709,6 +722,15 @@ function IconLog() {
       <line x1="11" y1="7" x2="17" y2="7" />
       <line x1="11" y1="11" x2="17" y2="11" />
       <line x1="11" y1="15" x2="17" y2="15" />
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
@@ -970,6 +992,81 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
   );
 }
 
+// ─── Settings Panel ───────────────────────────────────────────────────────────
+
+function SettingsPanel({ settings, onSettingsChange, onClose }: {
+  settings: Settings;
+  onSettingsChange: (s: Settings) => void;
+  onClose: () => void;
+}) {
+  const toggle = (key: keyof Settings) => {
+    const updated = { ...settings, [key]: !settings[key] };
+    onSettingsChange(updated);
+  };
+
+  return (
+    <div className="history-overlay" onClick={onClose} data-testid="settings-overlay">
+      <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Settings</h3>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
+            aria-label="Close settings"
+            data-testid="settings-close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+          {/* Setting: separate bars */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
+            <div>
+              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
+                Show sets as separate bars
+              </p>
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                Display each set as its own rep bar instead of a single combined bar.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.showSeparateBars}
+              onClick={() => toggle("showSeparateBars")}
+              data-testid="toggle-separate-bars"
+              style={{
+                flexShrink: 0,
+                marginLeft: "16px",
+                width: "44px",
+                height: "26px",
+                borderRadius: "13px",
+                border: "none",
+                cursor: "pointer",
+                background: settings.showSeparateBars ? "var(--color-success)" : "var(--color-border)",
+                position: "relative",
+                transition: "background 200ms ease",
+              }}
+            >
+              <span style={{
+                position: "absolute",
+                top: "3px",
+                left: settings.showSeparateBars ? "21px" : "3px",
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 200ms ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
   const [historyData, setHistoryData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
   const [view, setView] = useState<"active" | "archive">("active");
@@ -1045,36 +1142,42 @@ function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
 
 // ─── Rep Bar ─────────────────────────────────────────────────────────────────
 
-function RepBar({ exercise, isActive, loggedReps, onTap }: {
-  exercise: Exercise; isActive: boolean; loggedReps: number | null; onTap: (r: number) => void;
+function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testIdSuffix }: {
+  maxReps: number;
+  referenceReps: number | null;
+  isActive: boolean;
+  loggedReps: number | null;
+  onTap: (r: number) => void;
+  testIdSuffix?: string;
 }) {
-  const { maxReps, lastReps } = exercise;
   const squares = Array.from({ length: maxReps }, (_, i) => i + 1);
+  const suffix = testIdSuffix ?? "";
 
   const getState = (rep: number) => {
     if (loggedReps !== null) return rep <= loggedReps ? "filled" : "empty";
-    return rep <= (lastReps ?? 0) ? "reference" : "empty";
+    return rep <= (referenceReps ?? 0) ? "reference" : "empty";
   };
 
   const showLabel = (rep: number) => {
     if (rep === maxReps) return true;
     if (loggedReps !== null && rep === loggedReps && rep !== maxReps) return true;
-    if (loggedReps === null && rep === (lastReps ?? 0) && rep !== maxReps) return true;
+    if (loggedReps === null && rep === (referenceReps ?? 0) && rep !== maxReps) return true;
     return false;
   };
 
+  const tappable = isActive && loggedReps === null;
+
   return (
-    <div className="rep-bar" data-testid="rep-bar">
+    <div className="rep-bar" data-testid={`rep-bar${suffix}`}>
       {squares.map((rep) => {
         const state = getState(rep);
-        const tappable = isActive && loggedReps === null;
         return (
           <button
             key={rep}
             className={`rep-square ${state} ${tappable ? "tappable" : ""}`}
             onClick={tappable ? () => onTap(rep) : undefined}
             aria-label={`${rep} rep${rep !== 1 ? "s" : ""}`}
-            data-testid={`rep-square-${rep}`}
+            data-testid={`rep-square${suffix}-${rep}`}
             tabIndex={tappable ? 0 : -1}
             style={{ cursor: tappable ? "pointer" : "default" }}
           >
@@ -1083,6 +1186,89 @@ function RepBar({ exercise, isActive, loggedReps, onTap }: {
         );
       })}
     </div>
+  );
+}
+
+function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSet, onUndoSet, settings }: {
+  exercise: Exercise;
+  isActive: boolean;
+  loggedReps: number | null;
+  loggedRepsSets?: (number | null)[];
+  onTap: (r: number) => void;
+  onTapSet?: (i: number, r: number) => void;
+  onUndoSet?: (i: number) => void;
+  settings: Settings;
+}) {
+  // Snapshot initial reference values on mount so that logging a set (which
+  // mutates exercise.lastReps via logSet) doesn't corrupt the reference
+  // display for other bars in separate-bars mode.
+  const initialRefs = useRef({
+    lastReps: exercise.lastReps,
+    lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : undefined,
+  });
+
+  if (!settings.showSeparateBars) {
+    const validRefs = (initialRefs.current.lastRepsSets ?? []).filter((v): v is number => v != null);
+    const referenceReps = validRefs.length > 0
+      ? Math.min(...validRefs)
+      : initialRefs.current.lastReps;
+    return (
+      <RepBarRow
+        maxReps={exercise.maxReps}
+        referenceReps={referenceReps}
+        isActive={isActive}
+        loggedReps={loggedReps}
+        onTap={onTap}
+      />
+    );
+  }
+
+  // Separate bars mode: one bar per set, each independently tappable
+  const numBars = initialRefs.current.lastRepsSets?.length ?? exercise.sets;
+  const anyLogged = loggedRepsSets?.some((r) => r !== null) ?? false;
+
+  return (
+    <>
+      <div data-testid="rep-bar-multi">
+        {Array.from({ length: numBars }, (_, i) => {
+          const ref = initialRefs.current.lastRepsSets?.[i] ?? initialRefs.current.lastReps;
+          const setLogged = loggedRepsSets?.[i] ?? null;
+
+          // Every logged bar is tappable to undo it — same UX as single mode.
+          if (setLogged !== null && isActive && onUndoSet) {
+            return (
+              <div key={i} onClick={() => onUndoSet(i)} style={{ cursor: "pointer" }}
+                data-testid={`rep-bar-undo-set-${i}`}>
+                <RepBarRow
+                  maxReps={exercise.maxReps}
+                  referenceReps={ref}
+                  isActive={false}
+                  loggedReps={setLogged}
+                  onTap={() => {}}
+                  testIdSuffix={`-set-${i}`}
+                />
+              </div>
+            );
+          }
+
+          return (
+            <RepBarRow
+              key={i}
+              maxReps={exercise.maxReps}
+              referenceReps={ref}
+              isActive={isActive && setLogged === null}
+              loggedReps={setLogged}
+              onTap={(r) => onTapSet?.(i, r)}
+              testIdSuffix={`-set-${i}`}
+            />
+          );
+        })}
+      </div>
+      {/* Single static hint below all bars — never causes layout shift */}
+      {isActive && anyLogged && onUndoSet && (
+        <p className="undo-hint">Tap bar to undo</p>
+      )}
+    </>
   );
 }
 
@@ -1344,7 +1530,7 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
 
-function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
   exercise: Exercise;
   isActive: boolean;
   sessionId: number | null;
@@ -1352,24 +1538,106 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  settings: Settings;
 }) {
+  // Snapshot exercise reference values on mount so up/down comparison always
+  // uses the values from before this session's sets were logged (logSet()
+  // mutates exercise.lastReps in storage, which flows back via onExerciseChanged).
+  const exerciseInitRef = useRef({
+    lastReps: exercise.lastReps,
+    lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
+    weight: exercise.weight,
+  });
+
+  // ── Single-bar mode state ─────────────────────────────────────────────────
   const [loggedReps, setLoggedReps] = useState<number | null>(null);
+  // IDs of all SessionSets created by logSetBulk — needed to delete all on undo
+  const singleModeSetIdsRef = useRef<number[]>([]);
   const [isDecline, setIsDecline] = useState(false);
   const [isUp, setIsUp] = useState(false);
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const computeOutcome = (reps: number, weight: number) =>
-    computeSetOutcome(reps, weight, exercise.lastReps, exercise.weight);
+  // ── Multi-bar mode state (separate bars setting) ──────────────────────────
+  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(
+    () => Array(exercise.sets).fill(null)
+  );
+  // SessionSet IDs parallel to loggedRepsSets — used to delete a specific set on undo
+  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(
+    () => Array(exercise.sets).fill(null)
+  );
+  // Track log order (used for progress display only)
+  const [loggedOrder, setLoggedOrder] = useState<number[]>([]);
+  // Which set bar triggered the pending weight prompt
+  const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
 
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const isSingleMode = !settings.showSeparateBars;
+  const isComplete = isSingleMode
+    ? loggedReps !== null
+    : loggedRepsSets.every((r) => r !== null);
+
+  // ── Mode-switch sync ──────────────────────────────────────────────────────
+  // When the user toggles "Show sets as separate bars" mid-exercise, sync the
+  // other mode's state so completion badges and bars remain consistent.
+  // Refs hold latest state values so the effect closure is always fresh.
+  const loggedRepsRef = useRef(loggedReps);
+  loggedRepsRef.current = loggedReps;
+  const loggedRepsSetsRef = useRef(loggedRepsSets);
+  loggedRepsSetsRef.current = loggedRepsSets;
+  const loggedSetIdsRef = useRef(loggedSetIds);
+  loggedSetIdsRef.current = loggedSetIds;
+  useEffect(() => {
+    if (isSingleMode) {
+      // Separate → single: promote completed multi-mode state into loggedReps
+      if (loggedRepsSetsRef.current.every((r) => r !== null)) {
+        setLoggedReps(Math.min(...(loggedRepsSetsRef.current as number[])));
+        singleModeSetIdsRef.current = loggedSetIdsRef.current.filter((id): id is number => id !== null);
+      }
+    } else {
+      // Single → separate: fill all set bars from loggedReps
+      if (loggedRepsRef.current !== null) {
+        setLoggedRepsSets(Array(exercise.sets).fill(loggedRepsRef.current));
+        setLoggedSetIds([...singleModeSetIdsRef.current]);
+        setLoggedOrder(Array.from({ length: exercise.sets }, (_, i) => i));
+      }
+    }
+  }, [isSingleMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Outcome computation ───────────────────────────────────────────────────
+  // Single mode: compare reps vs original lastReps (snapshotted at mount to
+  // avoid corruption by logSet() mutating exercise.lastReps mid-session).
+  const computeOutcomeForSingle = (reps: number, weight: number) => {
+    const { lastReps, lastRepsSets } = exerciseInitRef.current;
+    const prevTotal = lastRepsSets && lastRepsSets.length > 1
+      ? lastRepsSets.reduce((a, b) => a + b, 0)
+      : lastReps;
+    const currentReps = lastRepsSets && lastRepsSets.length > 1
+      ? reps * exercise.sets
+      : reps;
+    return computeSetOutcome(currentReps, weight, prevTotal, exerciseInitRef.current.weight);
+  };
+
+  // Multi mode: compare total achieved reps vs total previous reps.
+  const computeOutcomeForMulti = (completedSets: number[], weight: number) => {
+    const { lastReps, lastRepsSets } = exerciseInitRef.current;
+    const totalCurrent = completedSets.reduce((a, b) => a + b, 0);
+    const prevTotal = lastRepsSets && lastRepsSets.length > 1
+      ? lastRepsSets.reduce((a, b) => a + b, 0)
+      : (lastReps !== null ? lastReps * exercise.sets : null);
+    return computeSetOutcome(totalCurrent, weight, prevTotal, exerciseInitRef.current.weight);
+  };
+
+  // ── Single-bar commit & tap ───────────────────────────────────────────────
   const commitLog = (reps: number, weight: number) => {
     if (!sessionId) return;
-    const { decline, up } = computeOutcome(reps, weight);
+    const { decline, up } = computeOutcomeForSingle(reps, weight);
     setLoggedReps(reps);
     setIsDecline(decline);
     setIsUp(up);
-    logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps });
+    const created = logSetBulk({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, numSets: exercise.sets });
+    singleModeSetIdsRef.current = created.map((s) => s.id);
     onExerciseChanged();
     onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets });
   };
@@ -1377,15 +1645,15 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   const handleRepTap = (reps: number) => {
     if (!isActive || !sessionId) return;
     if (loggedReps !== null) {
-      // Undo
       setLoggedReps(null); setIsDecline(false); setIsUp(false);
-      undoSet(sessionId, exercise.id);
+      singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id));
+      singleModeSetIdsRef.current = [];
+      updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets });
       onExerciseChanged();
       onSetUndone(exercise.id);
       return;
     }
     if (reps === exercise.maxReps) {
-      // Flash green first, then show weight prompt after a short delay
       setLoggedReps(reps);
       setPendingReps(reps);
       setTimeout(() => setShowWeightPrompt("increase"), 350);
@@ -1394,17 +1662,88 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     }
   };
 
-  const handleWeightConfirm = (newWeight: number) => {
-    if (showWeightPrompt === "increase") {
-      // loggedReps already flashed green; commit the actual log then update weight
-      commitLog(pendingReps!, exercise.weight);
-      updateExercise(exercise.id, { weight: newWeight, lastReps: null });
-    } else {
-      updateExercise(exercise.id, { weight: newWeight, lastReps: null });
-    }
+  // ── Multi-bar commit & tap ────────────────────────────────────────────────
+  const commitSetLog = (setIndex: number, reps: number, weight: number, currentSets: (number | null)[]) => {
+    if (!sessionId) return;
+    const newSets = currentSets.map((r, i) => (i === setIndex ? reps : r));
+    const newOrder = [...loggedOrder, setIndex];
+    setLoggedOrder(newOrder);
+    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, setIndex });
+    setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = created.id; return n; });
     onExerciseChanged();
-    setPendingReps(null);
-    setShowWeightPrompt(null);
+    // When all sets are now logged, compute the final outcome and notify the parent
+    if (newSets.every((r) => r !== null)) {
+      const { decline, up } = computeOutcomeForMulti(newSets as number[], weight);
+      setIsDecline(decline);
+      setIsUp(up);
+      onSetLogged({
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        repsAchieved: (newSets as number[]).reduce((a, b) => a + b, 0),
+        isDecline: decline,
+        isUp: up,
+        weight,
+        sets: exercise.sets,
+      });
+    }
+  };
+
+  const handleRepTapSet = (setIndex: number, reps: number) => {
+    if (!isActive || !sessionId) return;
+    if (reps === exercise.maxReps) {
+      // Flash bar green first, then show weight prompt
+      setLoggedRepsSets((prev) => { const n = [...prev]; n[setIndex] = reps; return n; });
+      setPendingReps(reps);
+      setPendingSetIdx(setIndex);
+      setTimeout(() => setShowWeightPrompt("increase"), 350);
+    } else {
+      const newSets = loggedRepsSets.map((r, i) => (i === setIndex ? reps : r));
+      setLoggedRepsSets(newSets);
+      commitSetLog(setIndex, reps, exercise.weight, newSets);
+    }
+  };
+
+  // Undo the most recently logged set (LIFO)
+  // Undo a specific set bar — any logged bar can be tapped to clear it.
+  const handleUndoSet = (setIndex: number) => {
+    if (!sessionId || loggedRepsSets[setIndex] === null) return;
+    const setId = loggedSetIds[setIndex];
+    const wasComplete = loggedRepsSets.every((r) => r !== null);
+    setLoggedRepsSets((prev) => { const n = [...prev]; n[setIndex] = null; return n; });
+    setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = null; return n; });
+    setLoggedOrder((prev) => prev.filter((i) => i !== setIndex));
+    if (setId !== null) deleteSessionSetById(setId);
+    onExerciseChanged();
+    if (wasComplete) { setIsDecline(false); setIsUp(false); onSetUndone(exercise.id); }
+  };
+
+  // ── Weight-prompt confirm (handles both single and multi mode) ────────────
+  const handleWeightConfirm = (newWeight: number) => {
+    if (!isSingleMode && pendingSetIdx !== null) {
+      // Multi mode: bar already shows green; now commit the set log
+      if (showWeightPrompt === "increase") {
+        const newSets = loggedRepsSets.map((r, i) => (i === pendingSetIdx ? pendingReps! : r));
+        commitSetLog(pendingSetIdx, pendingReps!, exercise.weight, newSets);
+        updateExercise(exercise.id, { weight: newWeight });
+      } else {
+        updateExercise(exercise.id, { weight: newWeight });
+      }
+      onExerciseChanged();
+      setPendingReps(null);
+      setPendingSetIdx(null);
+      setShowWeightPrompt(null);
+    } else {
+      // Single mode
+      if (showWeightPrompt === "increase") {
+        commitLog(pendingReps!, exercise.weight);
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
+      } else {
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
+      }
+      onExerciseChanged();
+      setPendingReps(null);
+      setShowWeightPrompt(null);
+    }
   };
 
   const handleEditSave = (data: Partial<Exercise>) => {
@@ -1416,8 +1755,17 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
     setShowEdit(false);
   };
 
-  const cardState = !isActive ? "idle" : loggedReps !== null ? "done" : "active";
+  const cardState = !isActive ? "idle" : isComplete ? "done" : "active";
   const isArchived = exercise.archived;
+
+  // In multi mode, the Lower button is available only before any set is logged
+  const showLowerBtn = isActive && showWeightPrompt === null && (
+    isSingleMode ? loggedReps === null : loggedOrder.length === 0
+  );
+  // Max-reps message
+  const hitMaxReps = isSingleMode
+    ? loggedReps === exercise.maxReps
+    : loggedRepsSets.some((r) => r === exercise.maxReps);
 
   return (
     <>
@@ -1443,44 +1791,64 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
             <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}kg</strong>
-            {loggedReps !== null && (
-              <span> · {loggedReps} rep{loggedReps !== 1 ? "s" : ""}</span>
+            {isSingleMode ? (
+              loggedReps !== null && <span> · {loggedReps} rep{loggedReps !== 1 ? "s" : ""}</span>
+            ) : (
+              loggedOrder.length > 0 && !isComplete && (
+                <span style={{ color: "var(--color-text-faint)" }}> · {loggedOrder.length}/{exercise.sets} sets</span>
+              )
             )}
           </p>
 
-          {isActive && loggedReps === null && showWeightPrompt === null && (
+          {showLowerBtn && (
             <button className="btn-weight" onClick={() => setShowWeightPrompt("decrease")} data-testid="btn-decrease-weight">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14" /></svg>
               Lower
             </button>
           )}
 
-          {loggedReps !== null && isDecline && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
+          {isComplete && isDecline && (
+            <span data-testid="badge-down" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
               <IconDecline /> Down
             </span>
           )}
-          {loggedReps !== null && isUp && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
+          {isComplete && isUp && (
+            <span data-testid="badge-up" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700 }}>
               <IconUp /> Up
             </span>
           )}
 
-          {loggedReps !== null && (
+          {isComplete && (
             <span className="done-check" data-testid="done-check">
               <IconCheck />
             </span>
           )}
         </div>
 
-        {/* Rep bar */}
-        {loggedReps !== null && isActive && showWeightPrompt === null ? (
-          <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); undoSet(sessionId!, exercise.id); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
-            <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} />
-            <p className="undo-hint">Tap bar to undo</p>
-          </div>
-        ) : (
-          <RepBar exercise={exercise} isActive={isActive && loggedReps === null} loggedReps={loggedReps} onTap={handleRepTap} />
+        {/* Rep bar — single mode */}
+        {isSingleMode && (
+          loggedReps !== null && isActive && showWeightPrompt === null ? (
+            <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id)); singleModeSetIdsRef.current = []; updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets }); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
+              <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} settings={settings} />
+              <p className="undo-hint">Tap bar to undo</p>
+            </div>
+          ) : (
+            <RepBar exercise={exercise} isActive={isActive && loggedReps === null} loggedReps={loggedReps} onTap={handleRepTap} settings={settings} />
+          )
+        )}
+
+        {/* Rep bar — multi mode (separate bars) */}
+        {!isSingleMode && (
+          <RepBar
+            exercise={exercise}
+            isActive={isActive}
+            loggedReps={null}
+            loggedRepsSets={loggedRepsSets}
+            onTap={() => {}}
+            onTapSet={handleRepTapSet}
+            onUndoSet={handleUndoSet}
+            settings={settings}
+          />
         )}
 
         {/* Weight prompt */}
@@ -1488,11 +1856,21 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
           <WeightPrompt
             label={showWeightPrompt === "increase" ? "New weight:" : "New (lower) weight:"}
             onConfirm={handleWeightConfirm}
-            onCancel={() => { setLoggedReps(null); setPendingReps(null); setShowWeightPrompt(null); }}
+            onCancel={() => {
+              if (!isSingleMode && pendingSetIdx !== null) {
+                // Cancel in multi mode: revert the bar that was pre-lit green
+                setLoggedRepsSets((prev) => { const n = [...prev]; n[pendingSetIdx] = null; return n; });
+                setPendingSetIdx(null);
+              } else {
+                setLoggedReps(null);
+              }
+              setPendingReps(null);
+              setShowWeightPrompt(null);
+            }}
           />
         )}
 
-        {loggedReps === exercise.maxReps && (
+        {hitMaxReps && (
           <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
             Max reps hit — weight updated for next session
           </p>
@@ -1523,7 +1901,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
 // ─── Sortable Exercise Card Wrapper ───────────────────────────────────────────
 
-function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch }: {
+function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
   exercise: Exercise;
   isReordering: boolean;
   isDropped: boolean;
@@ -1533,6 +1911,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  settings: Settings;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
 
@@ -1566,6 +1945,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
           onSetUndone={onSetUndone}
           onExerciseChanged={onExerciseChanged}
           onTabSwitch={onTabSwitch}
+          settings={settings}
         />
       </div>
     </div>
@@ -1599,6 +1979,13 @@ export default function LiftTracker() {
   const [isReordering, setIsReordering] = useState(false);
   const [droppedId, setDroppedId] = useState<number | null>(null);
   const [confirmRemoveGroup, setConfirmRemoveGroup] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<Settings>(() => getSettings());
+
+  const handleSettingsChange = useCallback((s: Settings) => {
+    saveSettings(s);
+    setSettings(s);
+  }, []);
 
   // Sensors: long-press (500 ms hold, ≤5 px movement) activates drag
   const sensors = useSensors(
@@ -1753,6 +2140,23 @@ export default function LiftTracker() {
               Log
             </button>
 
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              data-testid="btn-open-settings"
+              aria-label="Settings"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--color-text-muted)", padding: "4px 6px", borderRadius: "8px",
+                transition: "color 150ms ease",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-text)"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+            >
+              <IconSettings />
+            </button>
+
             {!isActive ? (
               <button className="btn btn-start" onClick={handleStartSession} data-testid="btn-start-session">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z" /></svg>
@@ -1886,6 +2290,7 @@ export default function LiftTracker() {
               onSetUndone={handleSetUndone}
               onExerciseChanged={refreshExercises}
               onTabSwitch={setActiveTab}
+              settings={settings}
             />
           ))
         ) : (
@@ -1911,6 +2316,7 @@ export default function LiftTracker() {
                   onSetUndone={handleSetUndone}
                   onExerciseChanged={refreshExercises}
                   onTabSwitch={setActiveTab}
+                  settings={settings}
                 />
               ))}
             </SortableContext>
@@ -1984,6 +2390,14 @@ export default function LiftTracker() {
 
       {showHistory && (
         <SessionHistoryPanel onClose={() => setShowHistory(false)} />
+      )}
+
+      {showSettings && (
+        <SettingsPanel
+          settings={settings}
+          onSettingsChange={handleSettingsChange}
+          onClose={() => setShowSettings(false)}
+        />
       )}
 
       {showExportModal && (

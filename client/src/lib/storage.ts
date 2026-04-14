@@ -9,9 +9,16 @@ export interface Exercise {
   maxReps: number;
   sets: number;
   lastReps: number | null;
+  lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)
   sortOrder: number;
   archived: boolean;
 }
+
+export interface Settings {
+  showSeparateBars: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false };
 
 export interface Session {
   id: number;
@@ -41,6 +48,7 @@ const KEYS = {
   sessionSets: `${_prefix}lt_session_sets`,
   nextId:      `${_prefix}lt_next_id`,
   categories:  `${_prefix}lt_categories`,
+  settings:    `${_prefix}lt_settings`,
 } as const;
 
 export const DEFAULT_CATEGORIES = ["Back", "Chest", "Upper", "Legs"];
@@ -283,21 +291,96 @@ export function logSet(params: {
   exerciseId: number;
   weight: number;
   repsAchieved: number;
+  setIndex?: number;
 }): SessionSet {
+  const { setIndex, ...setParams } = params;
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
 
   const set: SessionSet = {
     id: nextId(),
-    ...params,
+    ...setParams,
     prevLastReps: ex.lastReps,
   };
 
-  updateExercise(params.exerciseId, { lastReps: params.repsAchieved });
+  const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
+  if (setIndex !== undefined && ex.sets > 1) {
+    const prev = ex.lastRepsSets && ex.lastRepsSets.length === ex.sets
+      ? [...ex.lastRepsSets]
+      : Array(ex.sets).fill(ex.lastReps); // seed unlogged positions with pre-session value
+    prev[setIndex] = params.repsAchieved;
+    updates.lastRepsSets = prev;
+  }
+  updateExercise(params.exerciseId, updates);
 
   const sets = load<SessionSet>(KEYS.sessionSets);
   save(KEYS.sessionSets, [...sets, set]);
   return set;
+}
+
+/**
+ * Log N identical sets in one call (single-bar mode).
+ * Creates one SessionSet per set index and updates both exercise.lastReps
+ * and exercise.lastRepsSets atomically.
+ */
+export function logSetBulk(params: {
+  sessionId: number;
+  exerciseId: number;
+  weight: number;
+  repsAchieved: number;
+  numSets: number;
+}): SessionSet[] {
+  const exercises = getExercises();
+  const ex = exercises.find((e) => e.id === params.exerciseId)!;
+  const prevLastReps = ex.lastReps;
+
+  const newSets: SessionSet[] = [];
+  const allSets = load<SessionSet>(KEYS.sessionSets);
+
+  for (let i = 0; i < params.numSets; i++) {
+    const set: SessionSet = {
+      id: nextId(),
+      sessionId: params.sessionId,
+      exerciseId: params.exerciseId,
+      weight: params.weight,
+      repsAchieved: params.repsAchieved,
+      prevLastReps,
+    };
+    newSets.push(set);
+    allSets.push(set);
+  }
+
+  save(KEYS.sessionSets, allSets);
+
+  const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
+  if (params.numSets > 1) {
+    updates.lastRepsSets = Array(params.numSets).fill(params.repsAchieved);
+  }
+  updateExercise(params.exerciseId, updates);
+
+  return newSets;
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export function getSettings(): Settings {
+  try {
+    const stored = localStorage.getItem(KEYS.settings);
+    if (!stored) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } as Settings;
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+export function saveSettings(settings: Settings): void {
+  localStorage.setItem(KEYS.settings, JSON.stringify(settings));
+}
+
+/** Remove a specific SessionSet by ID without touching exercise.lastReps. */
+export function deleteSessionSetById(id: number): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  save(KEYS.sessionSets, sets.filter((s) => s.id !== id));
 }
 
 export function undoSet(sessionId: number, exerciseId: number): void {

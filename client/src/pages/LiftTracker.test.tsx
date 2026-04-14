@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings } from "@/lib/storage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -488,6 +488,356 @@ describe("remove group", () => {
   });
 });
 
+// ─── Settings panel ───────────────────────────────────────────────────────────
+
+describe("settings panel", () => {
+  it("renders a settings button (cog icon) in the header", () => {
+    renderApp();
+    expect(screen.getByTestId("btn-open-settings")).toBeInTheDocument();
+  });
+
+  it("clicking the settings button opens the settings panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("settings-panel")).toBeInTheDocument();
+  });
+
+  it("the settings panel contains the 'Show sets as separate bars' toggle", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-separate-bars")).toBeInTheDocument();
+  });
+
+  it("the toggle starts off (aria-checked=false) by default", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("clicking the toggle switches it to on", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("clicking the toggle twice returns it to off", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-separate-bars");
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("closing the settings panel via the × button hides the panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("settings-close"));
+    expect(screen.queryByTestId("settings-panel")).not.toBeInTheDocument();
+  });
+
+  it("clicking the overlay backdrop closes the settings panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("settings-overlay"));
+    expect(screen.queryByTestId("settings-panel")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Separate bars mode ───────────────────────────────────────────────────────
+
+describe("separate bars mode", () => {
+  it("shows a single rep-bar per exercise when the setting is off (default)", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+    // In single-bar mode there should be exactly one rep-bar per exercise shown
+    // (the default seeded exercises are also rendered; just check no rep-bar-multi)
+    expect(screen.queryByTestId("rep-bar-multi")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("rep-bar").length).toBeGreaterThan(0);
+  });
+
+  it("shows rep-bar-multi containers when the separate bars setting is on", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+
+    // Enable separate bars
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    expect(screen.getAllByTestId("rep-bar-multi").length).toBeGreaterThan(0);
+  });
+
+  it("renders one bar row per set when separate bars is on", async () => {
+    const user = userEvent.setup();
+    // 3 sets, no lastRepsSets → should show 3 bar rows
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Each rep-bar-multi container should have 3 children (rep-bar-set-0, -1, -2)
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+    expect(within(pullUpsContainer).getAllByTestId(/^rep-bar-set-/).length).toBe(3);
+  });
+
+  it("renders one bar per lastRepsSets entry when per-set data is present", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({
+      name: "Pull Ups",
+      category: "Back",
+      sets: 4,
+      lastReps: 10,
+      lastRepsSets: [10, 10, 10, 9],
+    }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+    // lastRepsSets has 4 entries → 4 bars
+    expect(within(pullUpsContainer).getAllByTestId(/^rep-bar-set-/).length).toBe(4);
+  });
+
+  it("each bar is independent: tapping bar 0 does not affect bar 1", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    // Enable separate bars
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Start session
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Tap rep 8 on bar 0 only
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+
+    // Bar 0 square 8 should now be filled (green), bar 1 square 8 should still be reference (not filled)
+    const bar0Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-0-8");
+    const bar1Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-1-8");
+    expect(bar0Sq8.className).toContain("filled");
+    expect(bar1Sq8.className).not.toContain("filled");
+  });
+
+  it("exercise is NOT marked done when only some sets are logged", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Only tap bar 0
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+
+    // done-check should NOT be present yet (exercise not complete)
+    expect(screen.queryByTestId("done-check")).not.toBeInTheDocument();
+  });
+
+  it("exercise IS marked done when all sets are logged", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Tap all 3 bars
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-8"));
+
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+  });
+
+  it("session counter increments only when all sets are logged in multi mode", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    // Counter starts at 0
+    expect(screen.getByTestId("session-counter").textContent).toContain("0");
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Log first two sets — counter should still be 0 (not complete)
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+    expect(screen.getByTestId("session-counter").textContent).toContain("0");
+
+    // Log final set — now counter should be 1
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-8"));
+    expect(screen.getByTestId("session-counter").textContent).toContain("1");
+  });
+
+  it("tapping a logged bar reverts it (last bar logged)", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Log bar 0 and bar 1
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+
+    // Undo bar 1 by tapping its undo wrapper
+    await user.click(screen.getByTestId("rep-bar-undo-set-1"));
+
+    // Bar 1 should now be unlogged (not filled), bar 0 still filled
+    const bar0Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-0-8");
+    const bar1Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-1-8");
+    expect(bar0Sq8.className).toContain("filled");
+    expect(bar1Sq8.className).not.toContain("filled");
+  });
+
+  it("tapping a non-last logged bar reverts only that bar", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    // Log bar 0 then bar 1
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+
+    // Undo bar 0 (NOT the last logged bar)
+    await user.click(screen.getByTestId("rep-bar-undo-set-0"));
+
+    // Bar 0 should be unlogged, bar 1 should still be filled
+    const bar0Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-0-8");
+    const bar1Sq8 = within(pullUpsContainer).getByTestId("rep-square-set-1-8");
+    expect(bar0Sq8.className).not.toContain("filled");
+    expect(bar1Sq8.className).toContain("filled");
+  });
+
+  it("up badge shows when total reps logged exceeds previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 9+9+9=27 should be Up
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-9"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-9"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-9"));
+
+    expect(screen.getByTestId("badge-up")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
+  });
+
+  it("down badge shows when total reps logged is less than previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 7+7+7=21 should be Down
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-7"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-7"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-7"));
+
+    expect(screen.getByTestId("badge-down")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+  });
+
+  it("no up/down badge when total reps equal previous total", async () => {
+    const user = userEvent.setup();
+    // lastReps=8, sets=3 → prev total=24; logging 8+8+8=24 → neither Up nor Down
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const multiContainers = screen.getAllByTestId("rep-bar-multi");
+    const pullUpsContainer = multiContainers[0];
+
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-0-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-1-8"));
+    await user.click(within(pullUpsContainer).getByTestId("rep-square-set-2-8"));
+
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
+  });
+});
+
 // ─── Session log panel ────────────────────────────────────────────────────────
 
 describe("session log panel", () => {
@@ -601,6 +951,279 @@ describe("session log panel", () => {
     await user.click(screen.getByTestId(`btn-delete-session-confirm-${session.id}`));
     const stored = getExercises().find((e) => e.id === ex.id);
     expect(stored?.lastReps).toBe(12);
+  });
+});
+
+// ─── Single-bar mode: unified storage model ───────────────────────────────────
+
+describe("single-bar mode: per-set storage", () => {
+  it("logging in single mode creates one SessionSet per exercise set", async () => {
+    const user = userEvent.setup();
+    // sets=3, single-bar mode (default)
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    const session = getActiveSession()!;
+    const sets = getSessionSets(session.id);
+    // Expect 3 SessionSets (one per set), not 1
+    expect(sets.filter((s) => s.repsAchieved === 9)).toHaveLength(3);
+  });
+
+  it("all created SessionSets have the same repsAchieved value", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-7"));
+
+    const session = getActiveSession()!;
+    const sets = getSessionSets(session.id);
+    expect(sets.every((s) => s.repsAchieved === 7)).toBe(true);
+  });
+
+  it("exercise.lastRepsSets is populated after single-mode logging", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastRepsSets).toEqual([9, 9, 9]);
+  });
+
+  it("undo in single mode removes all N created SessionSets", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    // Tap bar again to undo (inline undo div)
+    const undoBar = screen.getAllByTestId("rep-bar")[0];
+    await user.click(undoBar);
+
+    const session = getActiveSession()!;
+    expect(getSessionSets(session.id)).toHaveLength(0);
+  });
+
+  it("undo in single mode restores exercise.lastReps and lastRepsSets to pre-session values", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBars = screen.getAllByTestId("rep-bar");
+    await user.click(within(repBars[0]).getByTestId("rep-square-9"));
+
+    // Tap bar wrapper to undo
+    await user.click(screen.getAllByTestId("rep-bar")[0]);
+
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastReps).toBe(8);
+    expect(updated?.lastRepsSets).toEqual([8, 8, 8]);
+  });
+
+  it("single mode reference bar shows minimum of mixed previous per-set reps", async () => {
+    const user = userEvent.setup();
+    // lastRepsSets=[10, 8, 9] → min is 8; reference bar should have 8 squares filled
+    createExercise(makeExercise({
+      name: "Pull Ups",
+      category: "Back",
+      sets: 3,
+      maxReps: 12,
+      lastReps: 10,
+      lastRepsSets: [10, 8, 9],
+    }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+
+    // In single mode, rep-square-8 should be "reference" state, rep-square-9 should be "empty"
+    const repBars = screen.getAllByTestId("rep-bar");
+    const bar = repBars[0];
+    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
+    expect(within(bar).getByTestId("rep-square-9").className).not.toContain("reference");
+  });
+});
+
+// ─── Mode-switch mid-exercise ─────────────────────────────────────────────────
+
+describe("mode switch mid-exercise", () => {
+  it("separate→single: a fully-logged exercise stays green (done-check visible)", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    // Start in separate bars mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-1-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-2-9"));
+
+    // All sets logged → done-check should be visible
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+
+    // Switch to single mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Exercise should still appear complete (not go grey)
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+  });
+
+  it("separate→single: partial exercise still shows reference bar", async () => {
+    const user = userEvent.setup();
+    // lastReps=8 for all sets, logging only set 0 with 9 reps
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // Log only the first set
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+
+    // Switch to single mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Reference bar (square 8) should be visible — NOT empty
+    const bar = screen.getAllByTestId("rep-bar")[0];
+    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
+  });
+
+  it("single→separate: a logged exercise stays complete (done-check visible)", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // Log in single mode
+    const bars = screen.getAllByTestId("rep-bar");
+    await user.click(within(bars[0]).getByTestId("rep-square-9"));
+
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+
+    // Switch to separate bars mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Exercise should still appear complete
+    expect(screen.getByTestId("done-check")).toBeInTheDocument();
+  });
+
+  it("single→separate: all bars show as filled after mode switch", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    await user.click(within(screen.getAllByTestId("rep-bar")[0]).getByTestId("rep-square-9"));
+
+    // Switch to separate bars mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // All 3 set bars should show square 9 as filled
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    expect(within(multi).getByTestId("rep-square-set-0-9").className).toContain("filled");
+    expect(within(multi).getByTestId("rep-square-set-1-9").className).toContain("filled");
+    expect(within(multi).getByTestId("rep-square-set-2-9").className).toContain("filled");
+  });
+
+  it("separate→single: undo removes all session sets from storage", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    renderApp();
+
+    // Log all sets in separate mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-1-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-2-9"));
+
+    // Switch to single mode
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Tap the single bar to undo
+    await user.click(screen.getAllByTestId("rep-bar")[0]);
+
+    // All 3 session sets should be gone
+    const session = getActiveSession()!;
+    expect(getSessionSets(session.id)).toHaveLength(0);
+  });
+
+  it("separate→single: undo restores exercise to pre-session state", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    const multi = screen.getAllByTestId("rep-bar-multi")[0];
+    await user.click(within(multi).getByTestId("rep-square-set-0-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-1-9"));
+    await user.click(within(multi).getByTestId("rep-square-set-2-9"));
+
+    // Switch to single mode then undo
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-separate-bars"));
+    await user.click(screen.getByTestId("settings-close"));
+
+    await user.click(screen.getAllByTestId("rep-bar")[0]);
+
+    const updated = getExercises().find((e) => e.id === ex.id);
+    expect(updated?.lastReps).toBe(8);
+    expect(updated?.lastRepsSets).toEqual([8, 8, 8]);
   });
 });
 

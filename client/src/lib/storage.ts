@@ -12,6 +12,7 @@ export interface Exercise {
   lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)
   sortOrder: number;
   archived: boolean;
+  isFavourite?: boolean;
 }
 
 export interface Settings {

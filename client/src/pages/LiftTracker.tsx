@@ -38,6 +38,7 @@ import {
   undoSet,
   deleteSessionSetById,
   getAllSessionSets,
+  getSessionSets,
   archiveSession,
   unarchiveSession,
   deleteArchivedSession,
@@ -51,6 +52,7 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const ARCHIVE_TAB = "Archive";
+const FAVOURITES_TAB = "Favourites";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -539,7 +541,9 @@ function ResetButton({ onReset }: { onReset: () => void }) {
 // Safe for WhatsApp, Word, SMS — no special characters.
 
 export async function encodeState(exercises: Exercise[]): Promise<string> {
-  const json = JSON.stringify(exercises);
+  // Strip isFavourite — favourite status is not exported
+  const sanitized = exercises.map(({ isFavourite: _fav, ...rest }) => rest);
+  const json = JSON.stringify(sanitized);
   const bytes = new TextEncoder().encode(json);
   const cs = new CompressionStream("gzip");
   const writer = cs.writable.getWriter();
@@ -686,7 +690,7 @@ function IconUp() {
 
 function IconEdit() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     </svg>
   );
@@ -735,6 +739,22 @@ function IconSettings() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function IconStarFilled() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+function IconStarEmpty() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 }
@@ -1541,7 +1561,7 @@ function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
 
-function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
+function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
   exercise: Exercise;
   isActive: boolean;
   sessionId: number | null;
@@ -1549,37 +1569,74 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  onFavouriteToggle: () => void;
   settings: Settings;
 }) {
-  // Snapshot exercise reference values on mount so up/down comparison always
-  // uses the values from before this session's sets were logged (logSet()
-  // mutates exercise.lastReps in storage, which flows back via onExerciseChanged).
+  // ── Restore state on remount ──────────────────────────────────────────────
+  // Switching tabs unmounts and remounts exercise cards, losing local state.
+  // Seed state from the session's stored sets so the card looks correct when
+  // the user returns to a tab mid-session.
+  const [preloadedSets] = useState<SessionSet[]>(() => {
+    if (!sessionId) return [];
+    return getSessionSets(sessionId).filter((s) => s.exerciseId === exercise.id);
+  });
+  const wasLogged = preloadedSets.length > 0;
+
+  // Snapshot exercise reference values. If already logged this session,
+  // exercise.lastReps has been mutated — recover the genuine pre-session value
+  // from prevLastReps stored in the first session set.
   const exerciseInitRef = useRef({
-    lastReps: exercise.lastReps,
+    lastReps: wasLogged ? preloadedSets[0].prevLastReps : exercise.lastReps,
     lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
     weight: exercise.weight,
   });
 
   // ── Single-bar mode state ─────────────────────────────────────────────────
-  const [loggedReps, setLoggedReps] = useState<number | null>(null);
+  const [loggedReps, setLoggedReps] = useState<number | null>(
+    wasLogged ? preloadedSets[preloadedSets.length - 1].repsAchieved : null
+  );
   // IDs of all SessionSets created by logSetBulk — needed to delete all on undo
-  const singleModeSetIdsRef = useRef<number[]>([]);
-  const [isDecline, setIsDecline] = useState(false);
-  const [isUp, setIsUp] = useState(false);
+  const singleModeSetIdsRef = useRef<number[]>(
+    wasLogged ? preloadedSets.map((s) => s.id) : []
+  );
+
+  const [isDecline, setIsDecline] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr < prev;
+  });
+  const [isUp, setIsUp] = useState(() => {
+    if (!wasLogged) return false;
+    const prev = preloadedSets[0].prevLastReps ?? 0;
+    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    return prev > 0 && curr > prev;
+  });
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
   // ── Multi-bar mode state (separate bars setting) ──────────────────────────
-  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
+  const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    // Best-effort: assign sets to bars in chronological order (setIndex is not
+    // persisted in SessionSet, so exact bar positions cannot be fully recovered).
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.repsAchieved; });
+    return slots;
+  });
   // SessionSet IDs parallel to loggedRepsSets — used to delete a specific set on undo
-  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(
-    () => Array(exercise.sets).fill(null)
-  );
+  const [loggedSetIds, setLoggedSetIds] = useState<(number | null)[]>(() => {
+    if (!wasLogged) return Array(exercise.sets).fill(null);
+    const slots = Array<number | null>(exercise.sets).fill(null);
+    preloadedSets.slice(0, exercise.sets).forEach((s, i) => { slots[i] = s.id; });
+    return slots;
+  });
   // Track log order (used for progress display only)
-  const [loggedOrder, setLoggedOrder] = useState<number[]>([]);
+  const [loggedOrder, setLoggedOrder] = useState<number[]>(() => {
+    if (!wasLogged) return [];
+    return Array.from({ length: Math.min(preloadedSets.length, exercise.sets) }, (_, i) => i);
+  });
   // Which set bar triggered the pending weight prompt
   const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
 
@@ -1784,7 +1841,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
         className={`exercise-card ${cardState} ${isArchived ? "archived-card" : ""}`}
         data-testid={`exercise-card-${exercise.id}`}
       >
-        {/* Row 1: name + sets label inline + edit */}
+        {/* Row 1: name + sets label + edit + star (furthest right) */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
           <h2 style={{ fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.2, minWidth: 0 }} data-testid="exercise-name">
             {exercise.name}
@@ -1795,6 +1852,14 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
           <div style={{ flex: 1 }} />
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onFavouriteToggle(); }}
+            className={`btn-favourite${exercise.isFavourite ? " is-favourite" : ""}`}
+            aria-label={exercise.isFavourite ? "Remove from favourites" : "Add to favourites"}
+            data-testid="btn-favourite"
+          >
+            {exercise.isFavourite ? <IconStarFilled /> : <IconStarEmpty />}
           </button>
         </div>
 
@@ -1913,7 +1978,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
 
 // ─── Sortable Exercise Card Wrapper ───────────────────────────────────────────
 
-function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, settings }: {
+function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
   exercise: Exercise;
   isReordering: boolean;
   isDropped: boolean;
@@ -1923,6 +1988,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
   onSetUndone: (exerciseId: number) => void;
   onExerciseChanged: () => void;
   onTabSwitch: (cat: string) => void;
+  onFavouriteToggle: () => void;
   settings: Settings;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
@@ -1957,6 +2023,7 @@ function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, ses
           onSetUndone={onSetUndone}
           onExerciseChanged={onExerciseChanged}
           onTabSwitch={onTabSwitch}
+          onFavouriteToggle={onFavouriteToggle}
           settings={settings}
         />
       </div>
@@ -2104,10 +2171,11 @@ export default function LiftTracker() {
     }
   });
 
-  const filteredExercises = (activeTab === ARCHIVE_TAB
-    ? archivedExercises
-    : activeExercises.filter((ex) => ex.category === activeTab))
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const filteredExercises = (() => {
+    if (activeTab === ARCHIVE_TAB) return archivedExercises.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    if (activeTab === FAVOURITES_TAB) return activeExercises.filter((ex) => ex.isFavourite).sort((a, b) => a.category.localeCompare(b.category) || a.sortOrder - b.sortOrder);
+    return activeExercises.filter((ex) => ex.category === activeTab).sort((a, b) => a.sortOrder - b.sortOrder);
+  })();
 
   return (
     <div style={{ minHeight: "100dvh" }}>
@@ -2213,6 +2281,16 @@ export default function LiftTracker() {
 
         {/* Tab bar */}
         <div className="tab-bar" data-testid="tab-bar">
+          {/* Favourites tab — always shown first, star only */}
+          <button
+            className={`tab-btn ${activeTab === FAVOURITES_TAB ? "active-tab" : ""}`}
+            onClick={() => setActiveTab(FAVOURITES_TAB)}
+            data-testid="tab-favourites"
+            title="Favourites"
+            style={{ display: "inline-flex", alignItems: "center", color: activeTab === FAVOURITES_TAB ? "hsl(45 90% 55%)" : "hsl(45 90% 45%)" }}
+          >
+            <IconStarFilled />
+          </button>
           {allCategories.map((cat) => (
             <button
               key={cat}
@@ -2259,9 +2337,18 @@ export default function LiftTracker() {
         {filteredExercises.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--color-text-faint)" }}>
             <p style={{ fontSize: "var(--text-sm)" }}>
-              {activeTab === ARCHIVE_TAB ? "No archived exercises." : `No exercises in ${activeTab} yet.`}
+              {activeTab === ARCHIVE_TAB
+                ? "No archived exercises."
+                : activeTab === FAVOURITES_TAB
+                  ? "No favourite exercises yet."
+                  : `No exercises in ${activeTab} yet.`}
             </p>
-            {activeTab !== ARCHIVE_TAB && (
+            {activeTab === FAVOURITES_TAB && (
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", marginTop: "10px", lineHeight: 1.6 }}>
+                Tap the ☆ star on any exercise to add it here.
+              </p>
+            )}
+            {activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
               confirmRemoveGroup ? (
                 <div style={{ marginTop: "14px", display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
                   <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Remove this group?</span>
@@ -2302,6 +2389,22 @@ export default function LiftTracker() {
               onSetUndone={handleSetUndone}
               onExerciseChanged={refreshExercises}
               onTabSwitch={setActiveTab}
+              onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
+              settings={settings}
+            />
+          ))
+        ) : activeTab === FAVOURITES_TAB ? (
+          filteredExercises.map((ex) => (
+            <ExerciseCard
+              key={`${ex.id}-${activeSession?.id ?? "idle"}`}
+              exercise={ex}
+              isActive={isActive}
+              sessionId={activeSession?.id ?? null}
+              onSetLogged={handleSetLogged}
+              onSetUndone={handleSetUndone}
+              onExerciseChanged={refreshExercises}
+              onTabSwitch={setActiveTab}
+              onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
               settings={settings}
             />
           ))
@@ -2328,6 +2431,7 @@ export default function LiftTracker() {
                   onSetUndone={handleSetUndone}
                   onExerciseChanged={refreshExercises}
                   onTabSwitch={setActiveTab}
+                  onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
                   settings={settings}
                 />
               ))}
@@ -2335,7 +2439,7 @@ export default function LiftTracker() {
           </DndContext>
         )}
 
-        {activeTab !== ARCHIVE_TAB && (
+        {activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
           <button
             onClick={() => setShowAddSheet(true)}
             data-testid="btn-add-exercise"
@@ -2363,7 +2467,7 @@ export default function LiftTracker() {
           </button>
         )}
 
-        {!isActive && activeTab !== ARCHIVE_TAB && (
+        {!isActive && activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB && (
           <p style={{ textAlign: "center", fontSize: "var(--text-xs)", color: "var(--color-text-faint)", marginTop: "4px" }}>
             Tap <strong style={{ color: "var(--color-success)" }}>Start</strong> to begin your session
           </p>
@@ -2459,7 +2563,7 @@ export default function LiftTracker() {
 
       {showAddSheet && (
         <ExerciseSheet
-          defaultCategory={activeTab !== ARCHIVE_TAB ? activeTab : undefined}
+          defaultCategory={activeTab !== ARCHIVE_TAB && activeTab !== FAVOURITES_TAB ? activeTab : undefined}
           onSave={handleAddExercise}
           onClose={() => setShowAddSheet(false)}
         />

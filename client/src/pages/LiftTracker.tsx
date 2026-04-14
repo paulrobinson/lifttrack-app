@@ -106,7 +106,7 @@ export function parseImportText(text: string): ParseResult {
   });
 
   const isDivider = (s: string) => /^—{3,}$/.test(s) || /^-{3,}$/.test(s);
-  const isFieldLine = (s: string) => /^exercise\s*:/i.test(s) || /^max reps\s*:/i.test(s) || /^weight\s*:/i.test(s) || /^sets\s*:/i.test(s) || /^reps\s*:/i.test(s);
+  const isFieldLine = (s: string) => /^exercise\s*:/i.test(s) || /^max reps\s*:/i.test(s) || /^weight\s*:/i.test(s) || /^sets\s*:/i.test(s) || /^reps\s*:/i.test(s) || /^tempo\s*:/i.test(s);
 
   while (i < lines.length) {
     const line = lines[i];
@@ -170,6 +170,8 @@ export function parseImportText(text: string): ParseResult {
     const lastRepsSets = repValues.length > 1 ? repValues : undefined;
     const sets = lastRepsSets ? lastRepsSets.length : parsedSets;
 
+    const tempo = fields["tempo"] ? fields["tempo"].trim() : undefined;
+
     exercises.push({
       name,
       category: currentCategory!,
@@ -178,6 +180,7 @@ export function parseImportText(text: string): ParseResult {
       sets,
       lastReps,
       ...(lastRepsSets ? { lastRepsSets } : {}),
+      ...(tempo ? { tempo } : {}),
       sortOrder: sortOrder++,
       archived: false,
     });
@@ -580,6 +583,7 @@ export function buildExportText(exercises: Exercise[]): string {
         ? e.lastRepsSets.join(", ")
         : String(e.lastReps ?? "\u2013");
       lines.push(`Reps : ${repsStr}`);
+      if (e.tempo) lines.push(`Tempo : ${e.tempo}`);
       if (i < exs.length - 1) lines.push("\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014");
     });
     lines.push("");
@@ -1370,6 +1374,7 @@ function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveTo
   const [maxReps, setMaxReps] = useState(String(exercise?.maxReps ?? "12"));
   const [sets, setSets] = useState(String(exercise?.sets ?? "3"));
   const [category, setCategory] = useState<string>(exercise?.category ?? defaultCategory ?? sheetCategories[0] ?? "Back");
+  const [tempo, setTempo] = useState(exercise?.tempo ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
@@ -1379,6 +1384,7 @@ function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveTo
       maxReps: parseInt(maxReps) || exercise?.maxReps || 12,
       sets: parseInt(sets) || exercise?.sets || 3,
       category,
+      tempo: tempo.trim() || undefined,
     };
     if (exercise && category !== exercise.category && onTabSwitch) {
       onTabSwitch(category);
@@ -1417,6 +1423,11 @@ function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveTo
               {sheetCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+        </div>
+
+        <div className="edit-field" style={{ marginTop: "12px" }}>
+          <label>Tempo</label>
+          <input value={tempo} onChange={(e) => setTempo(e.target.value)} placeholder="e.g. 1-2-3" data-testid="edit-tempo" />
         </div>
 
         <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
@@ -1798,6 +1809,7 @@ function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone,
                 <span style={{ color: "var(--color-text-faint)" }}> · {loggedOrder.length}/{exercise.sets} sets</span>
               )
             )}
+            {exercise.tempo && <span> · tempo: {exercise.tempo}</span>}
           </p>
 
           {showLowerBtn && (

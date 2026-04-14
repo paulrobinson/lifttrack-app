@@ -10,6 +10,7 @@ export interface Exercise {
   sets: number;
   lastReps: number | null;
   lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)
+  tempo?: string;
   sortOrder: number;
   archived: boolean;
 }

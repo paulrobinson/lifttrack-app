@@ -499,3 +499,68 @@ describe("buildExportText with multi-set reps", () => {
     expect(result.exercises[0].lastReps).toBe(10);
   });
 });
+
+// ─── parseImportText – tempo ──────────────────────────────────────────────────
+
+describe("parseImportText with tempo", () => {
+  it("parses a Tempo field and sets it on the exercise", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\nTempo : 1-2-3\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].tempo).toBe("1-2-3");
+  });
+
+  it("leaves tempo undefined when the field is absent", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].tempo).toBeUndefined();
+  });
+
+  it("treats the Tempo line as a field (not a category header)", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\nTempo : 2-0-2\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises.length).toBe(1);
+  });
+
+  it("trims whitespace from the tempo value", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\nTempo :   slow  \n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].tempo).toBe("slow");
+  });
+});
+
+// ─── buildExportText – tempo ──────────────────────────────────────────────────
+
+describe("buildExportText with tempo", () => {
+  it("includes a Tempo line when tempo is set", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", tempo: "1-2-3" }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).toContain("Tempo : 1-2-3");
+  });
+
+  it("omits the Tempo line when tempo is not set", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back" }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).not.toContain("Tempo");
+  });
+
+  it("round-trips tempo through buildExportText → parseImportText", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", weight: 0, maxReps: 12, sets: 3, lastReps: 8, tempo: "2-1-2" }),
+    ];
+    const text = buildExportText(exercises);
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].tempo).toBe("2-1-2");
+  });
+});

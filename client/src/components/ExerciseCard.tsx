@@ -208,6 +208,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     lastReps: wasLogged ? preloadedSets[0].prevLastReps : exercise.lastReps,
     lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
     weight: exercise.weight,
+    lastTrend: exercise.lastTrend ?? null,
   });
 
   // ── Single-bar mode state
@@ -310,6 +311,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     setIsUp(up);
     const created = logSetBulk({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, numSets: exercise.sets });
     singleModeSetIdsRef.current = created.map((s) => s.id);
+    updateExercise(exercise.id, { lastTrend: up ? "up" : decline ? "down" : null });
     onExerciseChanged();
     onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets });
   };
@@ -320,7 +322,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       setLoggedReps(null); setIsDecline(false); setIsUp(false);
       singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id));
       singleModeSetIdsRef.current = [];
-      updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets });
+      updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets, lastTrend: exerciseInitRef.current.lastTrend });
       onExerciseChanged();
       onSetUndone(exercise.id);
       return;
@@ -347,6 +349,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       const { decline, up } = computeOutcomeForMulti(newSets as number[], weight);
       setIsDecline(decline);
       setIsUp(up);
+      updateExercise(exercise.id, { lastTrend: up ? "up" : decline ? "down" : null });
       onSetLogged({
         exerciseId: exercise.id,
         exerciseName: exercise.name,
@@ -382,7 +385,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     setLoggedOrder((prev) => prev.filter((i) => i !== setIndex));
     if (setId !== null) deleteSessionSetById(setId);
     onExerciseChanged();
-    if (wasComplete) { setIsDecline(false); setIsUp(false); onSetUndone(exercise.id); }
+    if (wasComplete) { setIsDecline(false); setIsUp(false); updateExercise(exercise.id, { lastTrend: exerciseInitRef.current.lastTrend }); onSetUndone(exercise.id); }
   };
 
   // ── Weight-prompt confirm
@@ -490,6 +493,16 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
               <IconUp /> Up
             </span>
           )}
+          {!isComplete && exercise.lastTrend === "down" && (
+            <span data-testid="badge-last-down" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700, opacity: 0.7 }}>
+              <IconDecline /> Down
+            </span>
+          )}
+          {!isComplete && exercise.lastTrend === "up" && (
+            <span data-testid="badge-last-up" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(142 50% 14%)", border: "1px solid hsl(142 40% 25%)", color: "hsl(142 70% 50%)", fontSize: "10px", fontWeight: 700, opacity: 0.7 }}>
+              <IconUp /> Up
+            </span>
+          )}
 
           {isComplete && (
             <span className="done-check" data-testid="done-check">
@@ -501,7 +514,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {/* Rep bar — single mode */}
         {isSingleMode && (
           loggedReps !== null && isActive && showWeightPrompt === null ? (
-            <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id)); singleModeSetIdsRef.current = []; updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets }); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
+            <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id)); singleModeSetIdsRef.current = []; updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets, lastTrend: exerciseInitRef.current.lastTrend }); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
               <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} settings={settings} />
               <p className="undo-hint">Tap bar to undo</p>
             </div>

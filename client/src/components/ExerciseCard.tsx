@@ -448,6 +448,10 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           <h2 style={{ fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.2, minWidth: 0 }} data-testid="exercise-name">
             {exercise.name}
           </h2>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", flexShrink: 0 }}>
+            ×{exercise.sets}
+          </span>
+          <div style={{ flex: 1 }} />
           {daysSinceLastDone !== null && (
             <span
               style={{
@@ -462,10 +466,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
               {daysSinceLastDone}d
             </span>
           )}
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", flexShrink: 0 }}>
-            ×{exercise.sets}
-          </span>
-          <div style={{ flex: 1 }} />
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
           </button>

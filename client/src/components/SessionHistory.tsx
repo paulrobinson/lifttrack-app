@@ -116,7 +116,7 @@ export function getCategorySummary(exercises: HistoryExerciseEntry[]): string | 
 
 // ─── Export ────────────────────────────────────────────────────────────────────
 
-function generateLogText(entries: HistorySessionEntry[]): string {
+export function generateLogText(entries: HistorySessionEntry[]): string {
   if (entries.length === 0) return "No completed sessions.";
 
   const lines: string[] = ["Exercise Log", "============", ""];

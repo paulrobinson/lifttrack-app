@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
 import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings } from "@/lib/storage";
+import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1015,6 +1016,73 @@ describe("session log panel", () => {
     await user.click(screen.getByTestId(`btn-delete-session-confirm-${session.id}`));
     const stored = getExercises().find((e) => e.id === ex.id);
     expect(stored?.lastReps).toBe(12);
+  });
+});
+
+// ─── Download log ────────────────────────────────────────────────────────────
+
+describe("download log", () => {
+  it("download button appears when there are completed sessions", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(session.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.getByTestId("btn-download-log")).toBeInTheDocument();
+  });
+
+  it("download button is hidden when there are no completed sessions", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    expect(screen.queryByTestId("btn-download-log")).not.toBeInTheDocument();
+  });
+
+  it("generateLogText returns empty message for no entries", () => {
+    expect(generateLogText([])).toBe("No completed sessions.");
+  });
+
+  it("generateLogText formats a session with exercises", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:45:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Pull Ups", category: "Back", weight: 0, repsAchieved: 10, prevLastReps: 8, weightIncreased: false },
+        { exerciseId: 2, exerciseName: "DB Row", category: "Back", weight: 28, repsAchieved: 7, prevLastReps: 8, weightIncreased: false },
+      ],
+    }];
+    const text = generateLogText(entries);
+    expect(text).toContain("Exercise Log");
+    expect(text).toContain("Pull Ups");
+    expect(text).toContain("0kg × 10 ↑");
+    expect(text).toContain("28kg × 7 ↓");
+    expect(text).toContain("2 exercises");
+    expect(text).toContain("All Back");
+  });
+
+  it("generateLogText shows weight increase note", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:30:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Bench Press", category: "Chest", weight: 65, repsAchieved: 8, prevLastReps: 8, weightIncreased: true },
+      ],
+    }];
+    const text = generateLogText(entries);
+    expect(text).toContain("(↑wt)");
+  });
+
+  it("generateLogText shows no trend when reps unchanged", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:30:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Cable Row", category: "Back", weight: 50, repsAchieved: 8, prevLastReps: 8, weightIncreased: false },
+      ],
+    }];
+    const text = generateLogText(entries);
+    expect(text).toContain("50kg × 8");
+    expect(text).not.toContain("↑");
+    expect(text).not.toContain("↓");
   });
 });
 

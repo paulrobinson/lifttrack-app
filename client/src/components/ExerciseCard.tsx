@@ -435,7 +435,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     ? loggedReps === exercise.maxReps
     : loggedRepsSets.some((r) => r === exercise.maxReps);
 
-  // Calculate days since exercise was last performed
   const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
 
   return (

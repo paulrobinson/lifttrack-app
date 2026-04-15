@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
 import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
@@ -1545,7 +1545,7 @@ describe("weight prompt", () => {
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
-    expect(screen.getByTestId("weight-prompt")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
   });
 
   it("cancelling weight prompt clears the pending log", async () => {
@@ -1554,6 +1554,7 @@ describe("weight prompt", () => {
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
     await user.click(screen.getByTestId("weight-prompt-cancel"));
     expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
     // Rep bar should still be tappable (not logged)
@@ -1567,6 +1568,7 @@ describe("weight prompt", () => {
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
     await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
     await user.click(screen.getByTestId("weight-prompt-confirm"));
     expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
@@ -1580,7 +1582,7 @@ describe("weight prompt", () => {
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("btn-decrease-weight"));
-    expect(screen.getByTestId("weight-prompt")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
   });
 });
 

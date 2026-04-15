@@ -114,6 +114,61 @@ export function getCategorySummary(exercises: HistoryExerciseEntry[]): string | 
   return null;
 }
 
+// ─── Export ────────────────────────────────────────────────────────────────────
+
+export function generateLogText(entries: HistorySessionEntry[]): string {
+  if (entries.length === 0) return "No completed sessions.";
+
+  const lines: string[] = ["Exercise Log", "============", ""];
+
+  for (const entry of entries) {
+    const { session, exercises } = entry;
+    const startDate = new Date(session.startedAt);
+    const endDate = session.endedAt ? new Date(session.endedAt) : null;
+
+    const dateStr = startDate.toLocaleDateString(undefined, {
+      weekday: "short", month: "short", day: "numeric", year: "numeric",
+    });
+    const timeStr = startDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const durationStr = endDate
+      ? (() => { const m = Math.round((endDate.getTime() - startDate.getTime()) / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; })()
+      : null;
+
+    const catSummary = getCategorySummary(exercises);
+
+    lines.push(`Session: ${dateStr}`);
+    lines.push(`Time: ${timeStr}${durationStr ? ` · Duration: ${durationStr}` : ""} · ${exercises.length} exercise${exercises.length !== 1 ? "s" : ""}`);
+    if (catSummary) lines.push(`Category: ${catSummary}`);
+    lines.push("");
+
+    for (const ex of exercises) {
+      const prev = ex.prevLastReps ?? 0;
+      const isUp = prev > 0 && ex.repsAchieved > prev;
+      const isDown = prev > 0 && ex.repsAchieved < prev;
+      const trend = isUp ? " ↑" : isDown ? " ↓" : "";
+      const weightNote = ex.weightIncreased ? " (↑wt)" : "";
+      lines.push(`  ${ex.exerciseName.padEnd(35)} ${ex.weight}kg × ${ex.repsAchieved}${trend}${weightNote}`);
+    }
+
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function downloadLog(entries: HistorySessionEntry[]) {
+  const text = generateLogText(entries);
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `exercise-log-${new Date().toISOString().slice(0, 10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Session Log Card ───────────────────────────────────────────────────────────
 
 function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive, onDelete }: {
@@ -282,13 +337,24 @@ export function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
       <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="session-history-panel">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
           <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Session Log</h3>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
-            aria-label="Close log"
-          >
-            ×
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {historyData.length > 0 && (
+              <button
+                onClick={() => downloadLog(historyData)}
+                data-testid="btn-download-log"
+                style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", background: "none", border: "1px solid var(--color-border)", borderRadius: "6px", cursor: "pointer", padding: "3px 8px", fontWeight: 600 }}
+              >
+                Download
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "22px", lineHeight: 1, padding: "0 4px" }}
+              aria-label="Close log"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div style={{ marginBottom: "14px" }}>

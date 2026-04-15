@@ -11,6 +11,7 @@ export interface Exercise {
   lastReps: number | null;
   lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)
   tempo?: string;
+  lastTrend?: "up" | "down" | null;
   sortOrder: number;
   archived: boolean;
   isFavourite?: boolean;

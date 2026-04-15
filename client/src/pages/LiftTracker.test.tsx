@@ -836,6 +836,70 @@ describe("separate bars mode", () => {
     expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
     expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
   });
+
+  it("shows last-trend badge from previous session when no session is active", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "up" }));
+    renderApp();
+
+    expect(screen.getByTestId("badge-last-up")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-last-down")).not.toBeInTheDocument();
+  });
+
+  it("shows last-trend down badge when previous session had a decline", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "down" }));
+    renderApp();
+
+    expect(screen.getByTestId("badge-last-down")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-last-up")).not.toBeInTheDocument();
+  });
+
+  it("hides last-trend badge once exercise is logged in current session", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "up", lastReps: 8 }));
+    renderApp();
+
+    expect(screen.getByTestId("badge-last-up")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    // lastTrend badge still visible before logging
+    expect(screen.getByTestId("badge-last-up")).toBeInTheDocument();
+
+    // Log reps (9 > 8 = up)
+    await user.click(screen.getByTestId("rep-square-9"));
+
+    // Now the live badge should show, last-trend badge should be gone
+    expect(screen.getByTestId("badge-up")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-last-up")).not.toBeInTheDocument();
+  });
+
+  it("restores last-trend badge after undo", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "down", lastReps: 8 }));
+    renderApp();
+
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("badge-last-down")).toBeInTheDocument();
+
+    // Log reps (9 > 8 = up)
+    await user.click(screen.getByTestId("rep-square-9"));
+    expect(screen.getByTestId("badge-up")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-last-down")).not.toBeInTheDocument();
+
+    // Undo — tap the bar
+    await user.click(screen.getByTestId("rep-bar"));
+
+    // Last-trend badge should be restored
+    expect(screen.getByTestId("badge-last-down")).toBeInTheDocument();
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+  });
+
+  it("no last-trend badge when lastTrend is not set", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+
+    expect(screen.queryByTestId("badge-last-up")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-last-down")).not.toBeInTheDocument();
+  });
 });
 
 // ─── Session log panel ────────────────────────────────────────────────────────

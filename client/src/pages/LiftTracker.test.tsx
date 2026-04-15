@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
 import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1370,5 +1370,408 @@ describe("export/import bar", () => {
   it("renders the import button", () => {
     renderApp();
     expect(screen.getByTestId("btn-import")).toBeInTheDocument();
+  });
+});
+
+// ─── Favourites ─────────────────────────────────────────────────────────────
+
+describe("favourites", () => {
+  it("favourites tab is always visible", () => {
+    renderApp();
+    expect(screen.getByTestId("tab-favourites")).toBeInTheDocument();
+  });
+
+  it("shows empty state when no exercises are favourited", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.getByText("No favourite exercises yet.")).toBeInTheDocument();
+  });
+
+  it("toggling favourite star adds exercise to favourites tab", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-favourite"));
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.getByText("Pull Ups")).toBeInTheDocument();
+  });
+
+  it("toggling favourite star again removes exercise from favourites tab", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", isFavourite: true }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.getByText("Pull Ups")).toBeInTheDocument();
+    await user.click(screen.getByTestId("btn-favourite"));
+    expect(screen.getByText("No favourite exercises yet.")).toBeInTheDocument();
+  });
+
+  it("favourite exercises are active during a session", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", isFavourite: true }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("tab-favourites"));
+    // Rep bar should be tappable (active)
+    const repBar = screen.getByTestId("rep-bar");
+    const square = within(repBar).getByTestId("rep-square-8");
+    expect(square.className).toContain("tappable");
+  });
+
+  it("persists isFavourite in storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-favourite"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.isFavourite).toBe(true);
+  });
+});
+
+// ─── Tempo ──────────────────────────────────────────────────────────────────
+
+describe("tempo", () => {
+  it("displays tempo on exercise card when set", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", tempo: "2-1-3" }));
+    renderApp();
+    expect(screen.getByText(/tempo: 2-1-3/)).toBeInTheDocument();
+  });
+
+  it("does not show tempo text when not set", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    expect(screen.queryByText(/tempo:/)).not.toBeInTheDocument();
+  });
+
+  it("can set tempo via edit sheet", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-edit"));
+    await user.type(screen.getByTestId("edit-tempo"), "3-1-2");
+    await user.click(screen.getByTestId("edit-save"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.tempo).toBe("3-1-2");
+  });
+});
+
+// ─── Session summary ────────────────────────────────────────────────────────
+
+describe("session summary", () => {
+  it("shows session summary with exercise count after ending session", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-9"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    expect(screen.getByTestId("summary-sheet")).toBeInTheDocument();
+    expect(screen.getByText("Session Complete")).toBeInTheDocument();
+    expect(screen.getByText(/1 exercise/)).toBeInTheDocument();
+  });
+
+  it("shows empty message when no exercises were logged", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    expect(screen.getByText("No exercises logged this session.")).toBeInTheDocument();
+  });
+
+  it("summary closes when Done is clicked", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    expect(screen.getByTestId("summary-sheet")).toBeInTheDocument();
+    await user.click(screen.getByTestId("summary-close"));
+    expect(screen.queryByTestId("summary-sheet")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Session counter ────────────────────────────────────────────────────────
+
+describe("session counter", () => {
+  it("counter is not visible when no session is active", () => {
+    renderApp();
+    expect(screen.queryByTestId("session-counter")).not.toBeInTheDocument();
+  });
+
+  it("counter shows 0 when session starts", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("0");
+  });
+
+  it("counter increments when an exercise is logged", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
+  });
+
+  it("counter decrements when a logged exercise is undone", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
+    // Undo by tapping the rep bar
+    await user.click(screen.getByTestId("rep-bar"));
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("0");
+  });
+});
+
+// ─── Weight prompt ──────────────────────────────────────────────────────────
+
+describe("weight prompt", () => {
+  it("shows weight prompt when max reps are tapped", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+  });
+
+  it("cancelling weight prompt clears the pending log", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.click(screen.getByTestId("weight-prompt-cancel"));
+    expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
+    // Rep bar should still be tappable (not logged)
+    const square = screen.getByTestId("rep-square-8");
+    expect(square.className).toContain("tappable");
+  });
+
+  it("confirming weight prompt logs the set and updates weight", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
+    await user.click(screen.getByTestId("weight-prompt-confirm"));
+    expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.weight).toBe(12.5);
+  });
+
+  it("lower button shows weight decrease prompt", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-decrease-weight"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+  });
+});
+
+// ─── Add exercise ───────────────────────────────────────────────────────────
+
+describe("add exercise", () => {
+  it("add exercise button not visible on archive tab", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    updateExercise(ex.id, { archived: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-archive"));
+    expect(screen.queryByTestId("btn-add-exercise")).not.toBeInTheDocument();
+  });
+
+  it("add exercise button not visible on favourites tab", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.queryByTestId("btn-add-exercise")).not.toBeInTheDocument();
+  });
+
+  it("adding exercise with tempo persists it", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "New Move");
+    await user.type(screen.getByTestId("edit-tempo"), "2-0-2");
+    await user.click(screen.getByTestId("edit-save"));
+    const stored = getExercises().find((e) => e.name === "New Move");
+    expect(stored?.tempo).toBe("2-0-2");
+  });
+});
+
+// ─── Add category ───────────────────────────────────────────────────────────
+
+describe("add category", () => {
+  it("shows error when submitting empty category name", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.click(screen.getByTestId("add-category-confirm"));
+    expect(screen.getByTestId("add-category-error")).toHaveTextContent("Please enter a category name.");
+  });
+
+  it("shows error when category name already exists", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "Back");
+    await user.click(screen.getByTestId("add-category-confirm"));
+    expect(screen.getByTestId("add-category-error")).toHaveTextContent("A category with that name already exists.");
+  });
+
+  it("adding a new category creates a tab", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-category"));
+    await user.type(screen.getByTestId("add-category-input"), "Arms");
+    await user.click(screen.getByTestId("add-category-confirm"));
+    expect(screen.getByTestId("tab-arms")).toBeInTheDocument();
+  });
+});
+
+// ─── Remove empty group ─────────────────────────────────────────────────────
+
+describe("remove empty group", () => {
+  it("shows remove group button on empty category tab", async () => {
+    const user = userEvent.setup();
+    saveCategories([...getCategories(), "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
+  });
+
+  it("confirming remove group deletes the category", async () => {
+    const user = userEvent.setup();
+    saveCategories([...getCategories(), "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    await user.click(screen.getByTestId("btn-remove-group-confirm"));
+    expect(screen.queryByTestId("tab-empty")).not.toBeInTheDocument();
+  });
+
+  it("cancelling remove group keeps the category", async () => {
+    const user = userEvent.setup();
+    saveCategories([...getCategories(), "Empty"]);
+    renderApp();
+    await user.click(screen.getByTestId("tab-empty"));
+    await user.click(screen.getByTestId("btn-remove-group"));
+    await user.click(screen.getByTestId("btn-remove-group-cancel"));
+    expect(screen.getByTestId("tab-empty")).toBeInTheDocument();
+  });
+});
+
+// ─── Storage: deleteSessionSetById ──────────────────────────────────────────
+
+describe("deleteSessionSetById", () => {
+  it("removes a single set by ID without affecting others", () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const session = startSession();
+    const set1 = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
+    const set2 = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 0, repsAchieved: 9 });
+    deleteSessionSetById(set1.id);
+    const remaining = getSessionSets(session.id);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(set2.id);
+  });
+});
+
+// ─── Exercise edit: archive and delete ──────────────────────────────────────
+
+describe("exercise edit: archive and delete", () => {
+  it("archive toggle from edit sheet moves exercise to archive", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-edit"));
+    await user.click(screen.getByTestId("btn-archive-toggle"));
+    // Exercise should now be in archive tab
+    await user.click(screen.getByTestId("tab-archive"));
+    expect(screen.getByText("Pull Ups")).toBeInTheDocument();
+  });
+
+  it("delete button only shows for archived exercises", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-edit"));
+    expect(screen.queryByTestId("btn-delete")).not.toBeInTheDocument();
+  });
+
+  it("deleting an archived exercise removes it from storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    updateExercise(ex.id, { archived: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("btn-edit"));
+    await user.click(screen.getByTestId("btn-delete"));
+    await user.click(screen.getByTestId("btn-delete-confirm"));
+    expect(getExercises().find((e) => e.id === ex.id)).toBeUndefined();
+  });
+});
+
+// ─── lastTrend persistence ──────────────────────────────────────────────────
+
+describe("lastTrend storage persistence", () => {
+  it("saves lastTrend to storage when exercise is logged up", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-9"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.lastTrend).toBe("up");
+  });
+
+  it("saves lastTrend as down when reps decline", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-7"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.lastTrend).toBe("down");
+  });
+
+  it("saves lastTrend as null when reps are equal", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.lastTrend).toBeNull();
+  });
+
+  it("restores lastTrend on undo", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12, lastTrend: "down" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-9"));
+    expect(getExercises().find((e) => e.id === ex.id)?.lastTrend).toBe("up");
+    // Undo
+    await user.click(screen.getByTestId("rep-bar"));
+    expect(getExercises().find((e) => e.id === ex.id)?.lastTrend).toBe("down");
   });
 });

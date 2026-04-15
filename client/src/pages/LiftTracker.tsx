@@ -137,6 +137,7 @@ export default function LiftTracker() {
       lastReps: null,
       sortOrder: maxSortOrder + 1,
       archived: false,
+      ...(data.tempo ? { tempo: data.tempo } : {}),
     });
     refreshExercises();
     setActiveTab(category);

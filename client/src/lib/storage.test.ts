@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   initStorage,
-  resetExercises,
   replaceExercises,
   getExercises,
   createExercise,
@@ -144,25 +143,6 @@ describe("archive / unarchive (via updateExercise)", () => {
     updateExercise(ex.id, { archived: false });
     const found = getExercises().find((e) => e.id === ex.id);
     expect(found?.archived).toBe(false);
-  });
-});
-
-// ─── resetExercises ───────────────────────────────────────────────────────────
-
-describe("resetExercises", () => {
-  it("replaces all exercises with the 25+ defaults", () => {
-    createExercise(makeExercise({ name: "Custom" }));
-    resetExercises();
-    const exercises = getExercises();
-    expect(exercises.length).toBeGreaterThanOrEqual(25);
-    expect(exercises.find((e) => e.name === "Custom")).toBeUndefined();
-  });
-
-  it("does not touch sessions", () => {
-    const session = startSession();
-    resetExercises();
-    const sessions = getSessions();
-    expect(sessions.find((s) => s.id === session.id)).toBeDefined();
   });
 });
 

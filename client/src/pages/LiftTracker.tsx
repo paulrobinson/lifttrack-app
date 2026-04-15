@@ -38,7 +38,7 @@ import { Modal, cancelBtnStyle } from "@/components/Modal";
 import { ImportButton, ExportModal } from "@/components/ImportExport";
 import { SessionHistoryPanel } from "@/components/SessionHistory";
 import { ExerciseCard, SortableExerciseCard } from "@/components/ExerciseCard";
-import { ResetButton, SettingsPanel, AddCategoryDialog, SessionSummary, ExerciseSheet } from "@/components/Dialogs";
+import { SettingsPanel, AddCategoryDialog, SessionSummary, ExerciseSheet } from "@/components/Dialogs";
 import type { SetLog } from "@/components/types";
 
 // Re-export functions/types used by tests
@@ -502,7 +502,6 @@ export default function LiftTracker() {
           <div className="bar-divider" />
           <ImportButton onImport={() => { refreshExercises(); refreshCategories(); }} />
         </div>
-        <ResetButton onReset={refreshExercises} />
       </main>
 
       <footer className="build-footer">

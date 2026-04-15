@@ -197,23 +197,6 @@ describe("add exercise", () => {
   });
 });
 
-// ─── Reset to defaults ────────────────────────────────────────────────────────
-
-describe("reset to defaults", () => {
-  it("shows the Reset button in the page", () => {
-    renderApp();
-    expect(screen.getByText(/reset exercises to defaults/i)).toBeInTheDocument();
-  });
-
-  it("clicking Reset shows a confirmation prompt", async () => {
-    const user = userEvent.setup();
-    renderApp();
-    await user.click(screen.getByText(/reset exercises to defaults/i));
-    // Confirmation heading appears
-    expect(screen.getByText(/reset exercises\?/i)).toBeInTheDocument();
-  });
-});
-
 // ─── Export modal ─────────────────────────────────────────────────────────────
 
 describe("export modal", () => {

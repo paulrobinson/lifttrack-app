@@ -3,78 +3,12 @@ import {
   type Exercise,
   type Settings,
   getCategories,
-  resetExercises,
   deleteExercise,
   updateExercise,
 } from "@/lib/storage";
 import { Modal, cancelBtnStyle } from "./Modal";
 import { IconDecline, IconUp, IconArchive, IconTrash } from "./icons";
 import type { SetLog } from "./types";
-
-// ─── Reset Button ───────────────────────────────────────────────────────────────
-
-export function ResetButton({ onReset }: { onReset: () => void }) {
-  const [step, setStep] = useState<"idle" | "confirm">("idle");
-
-  if (step === "confirm") {
-    return (
-      <div style={{
-        margin: "40px 0 24px",
-        padding: "14px 16px",
-        borderRadius: "12px",
-        border: "1px solid hsl(0 50% 30%)",
-        background: "hsl(0 40% 10%)",
-        fontSize: "var(--text-xs)",
-      }}>
-        <p style={{ fontWeight: 700, color: "hsl(0 70% 65%)", marginBottom: "6px" }}>Reset exercises?</p>
-        <p style={{ color: "var(--color-text-muted)", lineHeight: 1.5, marginBottom: "12px" }}>
-          This will delete all your exercises and restore the defaults. Your session history is not affected.
-        </p>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={() => { resetExercises(); onReset(); setStep("idle"); }}
-            style={{
-              flex: 1, padding: "8px", borderRadius: "8px", border: "none", cursor: "pointer",
-              background: "hsl(0 60% 40%)", color: "#fff", fontWeight: 700,
-              fontSize: "var(--text-xs)",
-            }}
-          >
-            Yes, reset
-          </button>
-          <button
-            onClick={() => setStep("idle")}
-            style={{
-              flex: 1, padding: "8px", borderRadius: "8px", cursor: "pointer",
-              background: "none", border: "1px solid var(--color-border)",
-              color: "var(--color-text-muted)", fontWeight: 600,
-              fontSize: "var(--text-xs)",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ textAlign: "center", margin: "40px 0 24px" }}>
-      <button
-        onClick={() => setStep("confirm")}
-        style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: "11px", color: "var(--color-text-faint)",
-          textDecoration: "underline", textUnderlineOffset: "3px",
-          opacity: 0.5,
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.opacity = "1"}
-        onMouseLeave={(e) => e.currentTarget.style.opacity = "0.5"}
-      >
-        Reset exercises to defaults
-      </button>
-    </div>
-  );
-}
 
 // ─── Settings Panel ─────────────────────────────────────────────────────────────
 

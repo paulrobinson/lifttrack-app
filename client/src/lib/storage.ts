@@ -183,13 +183,6 @@ export function syncCategoriesFromExercises(exercises: { category: string }[]): 
   }
 }
 
-export function resetExercises(): void {
-  // Wipe only the exercises key, then re-seed
-  localStorage.removeItem(KEYS.exercises);
-  // nextId carries on from wherever it is — new exercises get fresh IDs
-  save(KEYS.exercises, buildSeeds());
-}
-
 export function replaceExercises(exercises: Omit<Exercise, "id">[]): void {
   localStorage.removeItem(KEYS.exercises);
   const withIds = exercises.map((ex) => ({ ...ex, id: nextId() }));

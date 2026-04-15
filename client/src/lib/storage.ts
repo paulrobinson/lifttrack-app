@@ -394,3 +394,40 @@ export function undoSet(sessionId: number, exerciseId: number): void {
 
   save(KEYS.sessionSets, sets.filter((_, i) => i !== realIdx));
 }
+
+/**
+ * Get the number of days since an exercise was last done.
+ * Returns null if the exercise has never been done.
+ */
+export function getDaysSinceLastDone(exerciseId: number, currentSessionId: number | null): number | null {
+  const allSets = getAllSessionSets();
+  const allSessions = getSessions();
+
+  // Find all sets for this exercise, excluding the current session
+  const exerciseSets = allSets.filter(
+    (set) => set.exerciseId === exerciseId && set.sessionId !== currentSessionId
+  );
+
+  if (exerciseSets.length === 0) return null;
+
+  // Get unique session IDs and find the most recent one
+  const sessionIds = [...new Set(exerciseSets.map((set) => set.sessionId))];
+  const exerciseSessions = allSessions.filter((s) => sessionIds.includes(s.id));
+
+  if (exerciseSessions.length === 0) return null;
+
+  // Find the most recent session
+  const mostRecentSession = exerciseSessions.reduce((latest, current) => {
+    const latestDate = new Date(latest.startedAt);
+    const currentDate = new Date(current.startedAt);
+    return currentDate > latestDate ? current : latest;
+  });
+
+  // Calculate days since
+  const lastDate = new Date(mostRecentSession.startedAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays;
+}

@@ -13,6 +13,7 @@ import {
   logSetBulk,
   deleteSessionSetById,
   getSessionSets,
+  getDaysSinceLastDone,
 } from "@/lib/storage";
 import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
@@ -434,6 +435,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     ? loggedReps === exercise.maxReps
     : loggedRepsSets.some((r) => r === exercise.maxReps);
 
+  const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
+
   return (
     <>
       <div
@@ -445,6 +448,20 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           <h2 style={{ fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.2, minWidth: 0 }} data-testid="exercise-name">
             {exercise.name}
           </h2>
+          {daysSinceLastDone !== null && (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--color-text-muted)",
+                flexShrink: 0,
+                opacity: 0.6
+              }}
+              data-testid="days-since-last-done"
+            >
+              {daysSinceLastDone}d
+            </span>
+          )}
           <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", flexShrink: 0 }}>
             ×{exercise.sets}
           </span>

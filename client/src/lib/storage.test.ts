@@ -24,6 +24,7 @@ import {
   addCategory,
   deleteCategory,
   syncCategoriesFromExercises,
+  getDaysSinceLastDone,
   DEFAULT_CATEGORIES,
   type Exercise,
 } from "./storage";
@@ -663,5 +664,98 @@ describe("replaceExercises syncs categories", () => {
     replaceExercises([makeExercise({ category: "Back" })]);
     const count = getCategories().filter((c) => c === "Back").length;
     expect(count).toBe(1);
+  });
+});
+
+describe("getDaysSinceLastDone", () => {
+  it("returns null when the exercise has never been logged", () => {
+    const ex = createExercise(makeExercise());
+    expect(getDaysSinceLastDone(ex.id, null)).toBeNull();
+  });
+
+  it("returns null when only the current session has logged this exercise", () => {
+    const ex = createExercise(makeExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    expect(getDaysSinceLastDone(ex.id, session.id)).toBeNull();
+  });
+
+  it("returns 0 when the exercise was done today in a previous session", () => {
+    const ex = createExercise(makeExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(session.id);
+
+    const currentSession = startSession();
+    expect(getDaysSinceLastDone(ex.id, currentSession.id)).toBe(0);
+  });
+
+  it("calculates days since the most recent previous session", () => {
+    const ex = createExercise(makeExercise());
+
+    // Create an old session
+    const oldSession = startSession();
+    logSet({ sessionId: oldSession.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(oldSession.id);
+
+    // Manually set the old session to 7 days ago
+    const sessions = getSessions();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sessions.find((s) => s.id === oldSession.id)!.startedAt = sevenDaysAgo.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    const currentSession = startSession();
+    expect(getDaysSinceLastDone(ex.id, currentSession.id)).toBe(7);
+  });
+
+  it("ignores the current session when calculating days since last done", () => {
+    const ex = createExercise(makeExercise());
+
+    // Create an old session
+    const oldSession = startSession();
+    logSet({ sessionId: oldSession.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(oldSession.id);
+
+    // Set old session to 5 days ago
+    const sessions = getSessions();
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    sessions.find((s) => s.id === oldSession.id)!.startedAt = fiveDaysAgo.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    // Current session with logged exercise should be ignored
+    const currentSession = startSession();
+    logSet({ sessionId: currentSession.id, exerciseId: ex.id, weight: 20, repsAchieved: 12 });
+
+    expect(getDaysSinceLastDone(ex.id, currentSession.id)).toBe(5);
+  });
+
+  it("returns days from most recent session when multiple past sessions exist", () => {
+    const ex = createExercise(makeExercise());
+
+    // Create multiple past sessions
+    const session1 = startSession();
+    logSet({ sessionId: session1.id, exerciseId: ex.id, weight: 20, repsAchieved: 10 });
+    endSession(session1.id);
+
+    const session2 = startSession();
+    logSet({ sessionId: session2.id, exerciseId: ex.id, weight: 20, repsAchieved: 11 });
+    endSession(session2.id);
+
+    // Set session1 to 10 days ago and session2 to 3 days ago
+    const sessions = getSessions();
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    sessions.find((s) => s.id === session1.id)!.startedAt = tenDaysAgo.toISOString();
+    sessions.find((s) => s.id === session2.id)!.startedAt = threeDaysAgo.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    const currentSession = startSession();
+    // Should return 3 (from the most recent session2, not 10 from session1)
+    expect(getDaysSinceLastDone(ex.id, currentSession.id)).toBe(3);
   });
 });

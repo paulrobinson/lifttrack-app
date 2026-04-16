@@ -1758,3 +1758,108 @@ describe("lastTrend storage persistence", () => {
     expect(getExercises().find((e) => e.id === ex.id)?.lastTrend).toBe("down");
   });
 });
+
+// ─── Days since last done ─────────────────────────────────────────────────────
+
+describe("days since last done", () => {
+  it("does not show days badge when exercise has never been done", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    expect(screen.queryByTestId("days-since-last-done")).not.toBeInTheDocument();
+  });
+
+  it("does not show days badge during current session", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.queryByTestId("days-since-last-done")).not.toBeInTheDocument();
+  });
+
+  it("shows days badge when exercise was done in a previous session", async () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+
+    // Create a previous session
+    const oldSession = startSession();
+    logSet({ sessionId: oldSession.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
+    endSession(oldSession.id);
+
+    // Set the session to 5 days ago
+    const sessions = getSessions();
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    sessions.find((s) => s.id === oldSession.id)!.startedAt = fiveDaysAgo.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    renderApp();
+    expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
+    expect(screen.getByTestId("days-since-last-done").textContent).toBe("5d");
+  });
+
+  it("shows 0d when exercise was done earlier today in a previous session", async () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+
+    // Create a previous session today
+    const todaySession = startSession();
+    logSet({ sessionId: todaySession.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
+    endSession(todaySession.id);
+
+    renderApp();
+    expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
+    expect(screen.getByTestId("days-since-last-done").textContent).toBe("0d");
+  });
+
+  it("does not show days badge for current session, even after logging", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+
+    // Create a previous session
+    const oldSession = startSession();
+    logSet({ sessionId: oldSession.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
+    endSession(oldSession.id);
+
+    // Start a new session
+    const currentSession = startSession();
+
+    renderApp();
+
+    // Days should show before logging in current session
+    expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
+
+    // Log in current session
+    await user.click(screen.getByTestId("rep-square-8"));
+
+    // Days should still show (current session is excluded from calculation)
+    expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
+  });
+
+  it("shows days from most recent session when multiple past sessions exist", async () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+
+    // Create first session 10 days ago
+    const session1 = startSession();
+    logSet({ sessionId: session1.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
+    endSession(session1.id);
+
+    // Create second session 3 days ago
+    const session2 = startSession();
+    logSet({ sessionId: session2.id, exerciseId: ex.id, weight: 0, repsAchieved: 9 });
+    endSession(session2.id);
+
+    // Set session dates
+    const sessions = getSessions();
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    sessions.find((s) => s.id === session1.id)!.startedAt = tenDaysAgo.toISOString();
+    sessions.find((s) => s.id === session2.id)!.startedAt = threeDaysAgo.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    renderApp();
+    expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
+    // Should show 3d (most recent), not 10d
+    expect(screen.getByTestId("days-since-last-done").textContent).toBe("3d");
+  });
+});

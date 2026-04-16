@@ -13,6 +13,7 @@ import {
   logSetBulk,
   deleteSessionSetById,
   getSessionSets,
+  getDaysSinceLastDone,
 } from "@/lib/storage";
 import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
@@ -434,6 +435,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     ? loggedReps === exercise.maxReps
     : loggedRepsSets.some((r) => r === exercise.maxReps);
 
+  const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
+
   return (
     <>
       <div
@@ -449,6 +452,20 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             ×{exercise.sets}
           </span>
           <div style={{ flex: 1 }} />
+          {daysSinceLastDone !== null && (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--color-text-muted)",
+                flexShrink: 0,
+                opacity: 0.6
+              }}
+              data-testid="days-since-last-done"
+            >
+              {daysSinceLastDone}d
+            </span>
+          )}
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
           </button>
@@ -634,3 +651,4 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
     </div>
   );
 }
+

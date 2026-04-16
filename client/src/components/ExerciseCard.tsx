@@ -651,3 +651,4 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
     </div>
   );
 }
+

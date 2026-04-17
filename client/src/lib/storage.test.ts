@@ -198,6 +198,24 @@ describe("endSession", () => {
     endSession(session.id);
     expect(getActiveSession()).toBeNull();
   });
+
+  it("clears previousWeight for all exercises on session end", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 99 });
+    const session = startSession();
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBeNull();
+    expect(stored?.weightChangedInSession).toBeNull();
+  });
+
+  it("does not alter exercises without previousWeight on session end", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    const session = startSession();
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBeUndefined();
+  });
 });
 
 // ─── logSet ───────────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import {
   getSessionSets,
   getDaysSinceLastDone,
 } from "@/lib/storage";
-import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
+import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty, IconDumbbell } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
 import type { SetLog } from "./types";
 
@@ -391,13 +391,14 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
   // ── Weight-prompt confirm
   const handleWeightConfirm = (newWeight: number) => {
+    const weightMeta = { previousWeight: exercise.weight, weightChangedInSession: sessionId };
     if (!isSingleMode && pendingSetIdx !== null) {
       if (showWeightPrompt === "increase") {
         const newSets = loggedRepsSets.map((r, i) => (i === pendingSetIdx ? pendingReps! : r));
         commitSetLog(pendingSetIdx, pendingReps!, exercise.weight, newSets);
-        updateExercise(exercise.id, { weight: newWeight });
+        updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
       } else {
-        updateExercise(exercise.id, { weight: newWeight });
+        updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
       }
       onExerciseChanged();
       setPendingReps(null);
@@ -406,9 +407,9 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     } else {
       if (showWeightPrompt === "increase") {
         commitLog(pendingReps!, exercise.weight);
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
       } else {
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null });
+        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
       }
       onExerciseChanged();
       setPendingReps(null);
@@ -482,7 +483,11 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
+            <span style={{ color: "var(--color-text-muted)", verticalAlign: "middle", marginRight: "3px" }} data-testid="icon-dumbbell"><IconDumbbell /></span>
             <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}{settings.weightUnit}</strong>
+            {exercise.previousWeight != null && exercise.weightChangedInSession !== sessionId && (
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }} data-testid="previous-weight"> (was {exercise.previousWeight}{settings.weightUnit})</span>
+            )}
             {isSingleMode ? (
               loggedReps !== null && <span> · {loggedReps} rep{loggedReps !== 1 ? "s" : ""}</span>
             ) : (

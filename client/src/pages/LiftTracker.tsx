@@ -164,7 +164,7 @@ export default function LiftTracker() {
       // Wait for next frame to ensure DOM is updated
       requestAnimationFrame(() => {
         const element = document.querySelector(`[data-exercise-id="${newlyAddedId}"]`);
-        if (element) {
+        if (element && typeof element.scrollIntoView === "function") {
           element.scrollIntoView({ behavior: "smooth", block: "center" });
         }
       });

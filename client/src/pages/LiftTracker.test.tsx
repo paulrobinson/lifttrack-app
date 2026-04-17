@@ -5,6 +5,9 @@ import LiftTracker from "./LiftTracker";
 import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
 import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
 
+// Mock scrollIntoView for tests (not available in jsdom)
+Element.prototype.scrollIntoView = vi.fn();
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeExercise(overrides = {}) {
@@ -241,13 +244,16 @@ describe("add exercise", () => {
     await user.click(screen.getByTestId("edit-save"));
 
     await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          behavior: "smooth",
-          block: "center",
-        })
-      );
+      expect(scrollIntoViewMock).toHaveBeenCalled();
     });
+
+    // Verify it was called with the correct options
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        behavior: "smooth",
+        block: "center",
+      })
+    );
   });
 });
 

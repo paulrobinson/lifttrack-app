@@ -540,11 +540,11 @@ export default function LiftTracker() {
       </footer>
 
       {showSummary && (
-        <SessionSummary logs={summaryLogs} onClose={() => setShowSummary(false)} />
+        <SessionSummary logs={summaryLogs} onClose={() => setShowSummary(false)} weightUnit={settings.weightUnit} />
       )}
 
       {showHistory && (
-        <SessionHistoryPanel onClose={() => setShowHistory(false)} />
+        <SessionHistoryPanel onClose={() => setShowHistory(false)} weightUnit={settings.weightUnit} />
       )}
 
       {showSettings && (
@@ -603,6 +603,7 @@ export default function LiftTracker() {
       {showAddSheet && (
         <ExerciseSheet
           defaultCategory={activeTab !== RETIRED_TAB && activeTab !== FAVOURITES_TAB ? activeTab : undefined}
+          weightUnit={settings.weightUnit}
           onSave={handleAddExercise}
           onClose={() => setShowAddSheet(false)}
         />

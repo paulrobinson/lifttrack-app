@@ -598,6 +598,135 @@ describe("settings panel", () => {
   });
 });
 
+// ─── Weight unit setting ─────────────────────────────────────────────────────
+
+describe("weight unit setting", () => {
+  it("shows a weight unit toggle in the settings panel", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-weight-unit")).toBeInTheDocument();
+  });
+
+  it("weight unit defaults to kg", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-weight-unit")).toHaveTextContent("kg");
+  });
+
+  it("clicking the toggle switches to lbs", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-weight-unit");
+    await user.click(toggle);
+    expect(toggle).toHaveTextContent("lbs");
+  });
+
+  it("clicking the toggle twice returns to kg", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-weight-unit");
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(toggle).toHaveTextContent("kg");
+  });
+
+  it("exercise cards display weight with kg by default", () => {
+    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    renderApp();
+    const card = screen.getByTestId("exercise-card-" + getExercises().find(e => e.name === "Test Exercise")!.id);
+    expect(within(card).getByTestId("exercise-weight")).toHaveTextContent("30kg");
+  });
+
+  it("exercise cards display weight with lbs when setting is lbs", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
+    renderApp();
+    const card = screen.getByTestId("exercise-card-" + getExercises().find(e => e.name === "Test Exercise")!.id);
+    expect(within(card).getByTestId("exercise-weight")).toHaveTextContent("30lbs");
+  });
+
+  it("weight prompt shows the configured unit label", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30, maxReps: 12, lastReps: 8 }));
+    saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
+    renderApp();
+
+    // Start a session
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    // Tap max reps to trigger the weight prompt
+    const ex = getExercises().find(e => e.name === "Test Exercise")!;
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    const maxRepSquare = within(card).getByTestId(`rep-square-12`);
+    await user.click(maxRepSquare);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("weight-prompt")).toBeInTheDocument();
+    });
+
+    // The prompt should show "lbs" not "kg"
+    const prompt = screen.getByTestId("weight-prompt");
+    expect(prompt).toHaveTextContent("lbs");
+    expect(prompt).not.toHaveTextContent("kg");
+  });
+
+  it("edit exercise sheet shows weight unit label matching setting", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
+    renderApp();
+
+    const ex = getExercises().find(e => e.name === "Test Exercise")!;
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-edit"));
+    const sheet = screen.getByTestId("edit-sheet");
+    expect(sheet).toHaveTextContent("Weight (lbs)");
+  });
+
+  it("generateLogText uses lbs when specified", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:45:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Bench Press", category: "Chest", weight: 135, repsAchieved: 8, prevLastReps: 8, weightIncreased: false },
+      ],
+    }];
+    const text = generateLogText(entries, "lbs");
+    expect(text).toContain("135lbs × 8");
+    expect(text).not.toContain("kg");
+  });
+
+  it("generateLogText defaults to kg", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:45:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Bench Press", category: "Chest", weight: 60, repsAchieved: 8, prevLastReps: 8, weightIncreased: false },
+      ],
+    }];
+    const text = generateLogText(entries);
+    expect(text).toContain("60kg × 8");
+  });
+
+  it("persists the weight unit setting across re-renders", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    // Set to lbs
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-weight-unit"));
+    expect(screen.getByTestId("toggle-weight-unit")).toHaveTextContent("lbs");
+    await user.click(screen.getByTestId("settings-close"));
+
+    // Re-open settings — should still be lbs
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-weight-unit")).toHaveTextContent("lbs");
+  });
+});
+
 // ─── Separate bars mode ───────────────────────────────────────────────────────
 
 describe("separate bars mode", () => {

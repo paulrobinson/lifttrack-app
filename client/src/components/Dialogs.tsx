@@ -22,6 +22,8 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
     onSettingsChange(updated);
   };
 
+  const isLbs = settings.weightUnit === "lbs";
+
   return (
     <div className="history-overlay" onClick={onClose} data-testid="settings-overlay">
       <div className="history-sheet" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
@@ -38,6 +40,45 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
+            <div>
+              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
+                Weight unit
+              </p>
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                Display weights in kilograms or pounds.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={isLbs}
+              onClick={() => onSettingsChange({ ...settings, weightUnit: isLbs ? "kg" : "lbs" })}
+              data-testid="toggle-weight-unit"
+              aria-label={`Weight unit: ${isLbs ? "lbs" : "kg"}`}
+              style={{
+                flexShrink: 0,
+                marginLeft: "16px",
+                minWidth: "54px",
+                height: "30px",
+                borderRadius: "15px",
+                border: "1px solid var(--color-border)",
+                cursor: "pointer",
+                background: "var(--color-surface-2, hsl(220 12% 18%))",
+                position: "relative",
+                transition: "background 200ms ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "var(--text-xs)",
+                fontWeight: 700,
+                color: "var(--color-text)",
+                padding: "0 12px",
+              }}
+            >
+              {isLbs ? "lbs" : "kg"}
+            </button>
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
             <div>
               <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
@@ -145,7 +186,7 @@ export function AddCategoryDialog({ existingCategories, onAdd, onClose }: {
 
 // ─── Exercise Edit / Add Sheet ──────────────────────────────────────────────────
 
-export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRetireToggle, onDelete, onTabSwitch }: {
+export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRetireToggle, onDelete, onTabSwitch, weightUnit = "kg" }: {
   exercise?: Exercise;
   defaultCategory?: string;
   onSave: (data: Partial<Exercise>) => void;
@@ -153,6 +194,7 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
   onRetireToggle?: () => void;
   onDelete?: () => void;
   onTabSwitch?: (cat: string) => void;
+  weightUnit?: "kg" | "lbs";
 }) {
   const isNew = !exercise;
   const sheetCategories = getCategories();
@@ -193,7 +235,7 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div className="edit-field">
-            <label>Weight (kg)</label>
+            <label>Weight ({weightUnit})</label>
             <input type="number" inputMode="decimal" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="30" data-testid="edit-weight" />
           </div>
           <div className="edit-field">
@@ -269,7 +311,7 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
 
 // ─── Session Summary ────────────────────────────────────────────────────────────
 
-export function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () => void }) {
+export function SessionSummary({ logs, onClose, weightUnit = "kg" }: { logs: SetLog[]; onClose: () => void; weightUnit?: "kg" | "lbs" }) {
   const declineCount = logs.filter((l) => l.isDecline).length;
   const upCount = logs.filter((l) => l.isUp).length;
 
@@ -296,7 +338,7 @@ export function SessionSummary({ logs, onClose }: { logs: SetLog[]; onClose: () 
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
-                  {log.weight}kg × {log.repsAchieved}
+                  {log.weight}{weightUnit} × {log.repsAchieved}
                 </span>
                 {log.isDecline && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>

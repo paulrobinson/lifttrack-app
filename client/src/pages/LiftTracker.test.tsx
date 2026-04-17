@@ -1851,6 +1851,77 @@ describe("weight prompt", () => {
     await user.click(screen.getByTestId("btn-decrease-weight"));
     await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
   });
+
+  it("confirming weight increase stores previousWeight in storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
+    await user.click(screen.getByTestId("weight-prompt-confirm"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBe(10);
+    expect(stored?.weightChangedInSession).toBeDefined();
+  });
+
+  it("confirming weight decrease stores previousWeight in storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-decrease-weight"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.type(screen.getByTestId("weight-prompt-input"), "18");
+    await user.click(screen.getByTestId("weight-prompt-confirm"));
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBe(20);
+  });
+});
+
+// ─── Weight context display ─────────────────────────────────────────────────
+
+describe("weight context display", () => {
+  it("shows dumbbell icon on every exercise card", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    renderApp();
+    expect(screen.getByTestId("icon-dumbbell")).toBeInTheDocument();
+  });
+
+  it("shows '(was Xkg)' when previousWeight is set from a prior session", () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 30 }));
+    updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 999 });
+    renderApp();
+    expect(screen.getByTestId("previous-weight")).toHaveTextContent("(was 28kg)");
+  });
+
+  it("does not show '(was Xkg)' when weight was changed in the current session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
+    await user.click(screen.getByTestId("weight-prompt-confirm"));
+    // previousWeight is set but weightChangedInSession matches current session
+    expect(screen.queryByTestId("previous-weight")).not.toBeInTheDocument();
+  });
+
+  it("shows '(was Xkg)' with lbs when weight unit is lbs", () => {
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 30 }));
+    updateExercise(ex.id, { previousWeight: 25, weightChangedInSession: 999 });
+    saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
+    renderApp();
+    expect(screen.getByTestId("previous-weight")).toHaveTextContent("(was 25lbs)");
+  });
+
+  it("does not show '(was Xkg)' when previousWeight is not set", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    renderApp();
+    expect(screen.queryByTestId("previous-weight")).not.toBeInTheDocument();
+  });
 });
 
 // ─── Add exercise ───────────────────────────────────────────────────────────

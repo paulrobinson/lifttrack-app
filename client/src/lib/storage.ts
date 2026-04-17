@@ -15,6 +15,8 @@ export interface Exercise {
   sortOrder: number;
   archived: boolean;
   isFavourite?: boolean;
+  previousWeight?: number | null;           // weight before most recent change (for "was X" display)
+  weightChangedInSession?: number | null;   // session ID where weight was changed
 }
 
 export interface Settings {
@@ -254,6 +256,18 @@ export function endSession(id: number): Session {
     s.id === id ? { ...s, endedAt: new Date().toISOString() } : s
   );
   save(KEYS.sessions, updated);
+
+  // Clear "was X" weight indicators that were already displayed this session.
+  // Keep indicators where the weight was changed in this very session — they
+  // haven't been shown yet and should appear in the next session.
+  const exercises = getExercises();
+  const cleared = exercises.map((ex) =>
+    ex.previousWeight != null && ex.weightChangedInSession !== id
+      ? { ...ex, previousWeight: null, weightChangedInSession: null }
+      : ex
+  );
+  if (cleared !== exercises) save(KEYS.exercises, cleared);
+
   return updated.find((s) => s.id === id)!;
 }
 

@@ -198,6 +198,36 @@ describe("endSession", () => {
     endSession(session.id);
     expect(getActiveSession()).toBeNull();
   });
+
+  it("preserves previousWeight when weight was changed in the session being ended", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    const session = startSession();
+    // weight was changed in this session
+    updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: session.id });
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBe(28);
+    expect(stored?.weightChangedInSession).toBe(session.id);
+  });
+
+  it("clears previousWeight when weight was changed in a prior session", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    // weight was changed in a different session (id 99)
+    updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 99 });
+    const session = startSession();
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBeNull();
+    expect(stored?.weightChangedInSession).toBeNull();
+  });
+
+  it("does not alter exercises without previousWeight on session end", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    const session = startSession();
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBeUndefined();
+  });
 });
 
 // ─── logSet ───────────────────────────────────────────────────────────────────

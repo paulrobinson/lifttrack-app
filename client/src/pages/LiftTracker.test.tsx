@@ -2226,7 +2226,7 @@ describe("tab-switch preserves exercise completion state", () => {
     await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
-    // Log 6 reps on the first exercise (Bench Press, maxReps=8, so use 6 to avoid weight prompt)
+    // Log 6 reps on the first exercise (Bench Press, maxReps=10, so use 6 to avoid weight prompt)
     const repBar = screen.getAllByTestId("rep-bar")[0];
     await user.click(within(repBar).getByTestId("rep-square-6"));
 

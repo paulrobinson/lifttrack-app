@@ -48,10 +48,10 @@ function makeExercise(overrides: Partial<Omit<Exercise, "id">> = {}): Omit<Exerc
 // ─── initStorage ──────────────────────────────────────────────────────────────
 
 describe("initStorage", () => {
-  it("seeds 25 default exercises on first call", () => {
+  it("seeds 4 default exercises on first call", () => {
     initStorage();
     const exercises = getExercises();
-    expect(exercises.length).toBeGreaterThanOrEqual(25);
+    expect(exercises.length).toBe(4);
   });
 
   it("does not overwrite existing exercises when called again", () => {
@@ -544,7 +544,7 @@ describe("syncCategoriesFromExercises", () => {
   it("does not create duplicates for existing categories", () => {
     initStorage();
     const before = getCategories().length;
-    syncCategoriesFromExercises([{ category: "Back" }]);
+    syncCategoriesFromExercises([{ category: "Upper" }]);
     expect(getCategories().length).toBe(before);
   });
 });
@@ -691,8 +691,8 @@ describe("replaceExercises syncs categories", () => {
 
   it("does not duplicate existing categories", () => {
     initStorage();
-    replaceExercises([makeExercise({ category: "Back" })]);
-    const count = getCategories().filter((c) => c === "Back").length;
+    replaceExercises([makeExercise({ category: "Upper" })]);
+    const count = getCategories().filter((c) => c === "Upper").length;
     expect(count).toBe(1);
   });
 });

@@ -13,7 +13,7 @@ Element.prototype.scrollIntoView = vi.fn();
 function makeExercise(overrides = {}) {
   return {
     name: "Pull Ups",
-    category: "Back",
+    category: "Upper",
     weight: 0,
     maxReps: 12,
     sets: 3,
@@ -48,14 +48,14 @@ describe("initial render", () => {
   });
 
   it("shows sets count as a labeled value like '3 sets'", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3 }));
     renderApp();
     const card = screen.getByTestId("exercise-card-1");
     expect(within(card).getByText("3 sets")).toBeInTheDocument();
   });
 
   it("shows singular 'set' label when exercise has 1 set", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 1 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 1 }));
     renderApp();
     const card = screen.getByTestId("exercise-card-1");
     expect(within(card).getByText("1 set")).toBeInTheDocument();
@@ -67,23 +67,21 @@ describe("initial render", () => {
 describe("tab navigation", () => {
   it("renders category tabs for each category that has exercises", () => {
     renderApp();
-    expect(screen.getByTestId("tab-back")).toBeInTheDocument();
-    expect(screen.getByTestId("tab-chest")).toBeInTheDocument();
     expect(screen.getByTestId("tab-upper")).toBeInTheDocument();
-    expect(screen.getByTestId("tab-legs")).toBeInTheDocument();
+    expect(screen.getByTestId("tab-lower")).toBeInTheDocument();
   });
 
   it("clicking a different tab shows exercises from that category", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByTestId("tab-chest"));
-    expect(screen.getByText("Pec Deck")).toBeInTheDocument();
+    await user.click(screen.getByTestId("tab-lower"));
+    expect(screen.getByText("Back Squat")).toBeInTheDocument();
   });
 
-  it("clicking Back tab shows Back exercises", async () => {
+  it("clicking Upper tab shows Upper exercises", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
   });
 });
@@ -174,14 +172,14 @@ describe("rep logging", () => {
   it("clicking a rep square during a session marks it as done", async () => {
     const user = userEvent.setup();
     renderApp();
-    // Navigate to Back tab where Pull Ups lives
-    await user.click(screen.getByTestId("tab-back"));
+    // Navigate to Upper tab where Pull Ups lives
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
-    // Click rep square 8 on the first rep bar
+    // Click rep square 6 on the first rep bar (below maxReps to avoid weight prompt)
     const repBars = screen.getAllByTestId("rep-bar");
     const firstBar = repBars[0];
-    await user.click(within(firstBar).getByTestId("rep-square-8"));
+    await user.click(within(firstBar).getByTestId("rep-square-6"));
 
     // Session counter should show 1 exercise done
     expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
@@ -307,8 +305,8 @@ describe("exercise ordering", () => {
 
   it("a new exercise receives a sortOrder one above the current max for its category", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Existing A", category: "Back", sortOrder: 0 }));
-    createExercise(makeExercise({ name: "Existing B", category: "Back", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Existing A", category: "Upper", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Existing B", category: "Upper", sortOrder: 1 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-add-exercise"));
@@ -322,8 +320,8 @@ describe("exercise ordering", () => {
 
   it("a new exercise appears last in the rendered list for its category", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Alpha", category: "Back", sortOrder: 0 }));
-    createExercise(makeExercise({ name: "Beta",  category: "Back", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Alpha", category: "Upper", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Beta",  category: "Upper", sortOrder: 1 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-add-exercise"));
@@ -426,7 +424,7 @@ describe("custom categories", () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(screen.getByTestId("btn-add-category"));
-    await user.type(screen.getByTestId("add-category-input"), "back");
+    await user.type(screen.getByTestId("add-category-input"), "upper");
     await user.click(screen.getByTestId("add-category-confirm"));
     expect(screen.getByTestId("add-category-error")).toBeInTheDocument();
   });
@@ -434,8 +432,8 @@ describe("custom categories", () => {
   it("the exercise edit sheet shows custom categories in the group dropdown", async () => {
     const user = userEvent.setup();
     // Pre-seed a custom category
-    saveCategories(["Back", "Chest", "Upper", "Legs", "Aquatics"]);
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    saveCategories(["Upper", "Lower", "Aquatics"]);
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-edit"));
     const select = screen.getByTestId("edit-category") as HTMLSelectElement;
@@ -530,7 +528,7 @@ describe("remove group", () => {
     await user.click(screen.getByTestId("btn-remove-group"));
     expect(screen.getByTestId("btn-remove-group-confirm")).toBeInTheDocument();
     // Switch away and back
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("tab-empty"));
     expect(screen.queryByTestId("btn-remove-group-confirm")).not.toBeInTheDocument();
     expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
@@ -649,7 +647,7 @@ describe("weight unit setting", () => {
   });
 
   it("exercise cards display weight with kg by default", () => {
-    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
     renderApp();
     const card = screen.getByTestId("exercise-card-" + getExercises().find(e => e.name === "Test Exercise")!.id);
     expect(within(card).getByTestId("exercise-weight")).toHaveTextContent("30kg");
@@ -657,7 +655,7 @@ describe("weight unit setting", () => {
 
   it("exercise cards display weight with lbs when setting is lbs", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
     saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
     const card = screen.getByTestId("exercise-card-" + getExercises().find(e => e.name === "Test Exercise")!.id);
@@ -666,7 +664,7 @@ describe("weight unit setting", () => {
 
   it("weight prompt shows the configured unit label", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30, maxReps: 12, lastReps: 8 }));
     saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
 
@@ -691,7 +689,7 @@ describe("weight unit setting", () => {
 
   it("edit exercise sheet shows weight unit label matching setting", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Test Exercise", category: "Back", weight: 30 }));
+    createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
     saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
 
@@ -745,7 +743,7 @@ describe("weight unit setting", () => {
 
 describe("separate bars mode", () => {
   it("shows a single rep-bar per exercise when the setting is off (default)", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, lastReps: 8 }));
     renderApp();
     // In single-bar mode there should be exactly one rep-bar per exercise shown
     // (the default seeded exercises are also rendered; just check no rep-bar-multi)
@@ -755,7 +753,7 @@ describe("separate bars mode", () => {
 
   it("shows rep-bar-multi containers when the separate bars setting is on", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, lastReps: 8 }));
     renderApp();
 
     // Enable separate bars
@@ -769,7 +767,7 @@ describe("separate bars mode", () => {
   it("renders one bar row per set when separate bars is on", async () => {
     const user = userEvent.setup();
     // 3 sets, no lastRepsSets → should show 3 bar rows
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -786,7 +784,7 @@ describe("separate bars mode", () => {
     const user = userEvent.setup();
     createExercise(makeExercise({
       name: "Pull Ups",
-      category: "Back",
+      category: "Upper",
       sets: 4,
       lastReps: 10,
       lastRepsSets: [10, 10, 10, 9],
@@ -805,7 +803,7 @@ describe("separate bars mode", () => {
 
   it("each bar is independent: tapping bar 0 does not affect bar 1", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     // Enable separate bars
@@ -831,7 +829,7 @@ describe("separate bars mode", () => {
 
   it("exercise is NOT marked done when only some sets are logged", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -852,7 +850,7 @@ describe("separate bars mode", () => {
 
   it("exercise IS marked done when all sets are logged", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -874,7 +872,7 @@ describe("separate bars mode", () => {
 
   it("session counter increments only when all sets are logged in multi mode", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -901,7 +899,7 @@ describe("separate bars mode", () => {
 
   it("tapping a logged bar reverts it (last bar logged)", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -929,7 +927,7 @@ describe("separate bars mode", () => {
 
   it("tapping a non-last logged bar reverts only that bar", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -958,7 +956,7 @@ describe("separate bars mode", () => {
   it("up badge shows when total reps logged exceeds previous total", async () => {
     const user = userEvent.setup();
     // lastReps=8, sets=3 → prev total=24; logging 9+9+9=27 should be Up
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -981,7 +979,7 @@ describe("separate bars mode", () => {
   it("down badge shows when total reps logged is less than previous total", async () => {
     const user = userEvent.setup();
     // lastReps=8, sets=3 → prev total=24; logging 7+7+7=21 should be Down
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -1004,7 +1002,7 @@ describe("separate bars mode", () => {
   it("no up/down badge when total reps equal previous total", async () => {
     const user = userEvent.setup();
     // lastReps=8, sets=3 → prev total=24; logging 8+8+8=24 → neither Up nor Down
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -1025,7 +1023,7 @@ describe("separate bars mode", () => {
   });
 
   it("shows last-trend badge from previous session when no session is active", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "up" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastTrend: "up" }));
     renderApp();
 
     expect(screen.getByTestId("badge-last-up")).toBeInTheDocument();
@@ -1033,7 +1031,7 @@ describe("separate bars mode", () => {
   });
 
   it("shows last-trend down badge when previous session had a decline", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "down" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastTrend: "down" }));
     renderApp();
 
     expect(screen.getByTestId("badge-last-down")).toBeInTheDocument();
@@ -1042,7 +1040,7 @@ describe("separate bars mode", () => {
 
   it("hides last-trend badge once exercise is logged in current session", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "up", lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastTrend: "up", lastReps: 8 }));
     renderApp();
 
     expect(screen.getByTestId("badge-last-up")).toBeInTheDocument();
@@ -1061,7 +1059,7 @@ describe("separate bars mode", () => {
 
   it("restores last-trend badge after undo", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastTrend: "down", lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastTrend: "down", lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-start-session"));
@@ -1081,7 +1079,7 @@ describe("separate bars mode", () => {
   });
 
   it("no last-trend badge when lastTrend is not set", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
 
     expect(screen.queryByTestId("badge-last-up")).not.toBeInTheDocument();
@@ -1234,8 +1232,8 @@ describe("download log", () => {
     const entries: HistorySessionEntry[] = [{
       session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:45:00.000Z" },
       exercises: [
-        { exerciseId: 1, exerciseName: "Pull Ups", category: "Back", weight: 0, repsAchieved: 10, prevLastReps: 8, weightIncreased: false },
-        { exerciseId: 2, exerciseName: "DB Row", category: "Back", weight: 28, repsAchieved: 7, prevLastReps: 8, weightIncreased: false },
+        { exerciseId: 1, exerciseName: "Pull Ups", category: "Upper", weight: 0, repsAchieved: 10, prevLastReps: 8, weightIncreased: false },
+        { exerciseId: 2, exerciseName: "DB Row", category: "Upper", weight: 28, repsAchieved: 7, prevLastReps: 8, weightIncreased: false },
       ],
     }];
     const text = generateLogText(entries);
@@ -1244,7 +1242,7 @@ describe("download log", () => {
     expect(text).toContain("0kg × 10 ↑");
     expect(text).toContain("28kg × 7 ↓");
     expect(text).toContain("2 exercises");
-    expect(text).toContain("All Back");
+    expect(text).toContain("All Upper");
   });
 
   it("generateLogText shows weight increase note", () => {
@@ -1262,7 +1260,7 @@ describe("download log", () => {
     const entries: HistorySessionEntry[] = [{
       session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:30:00.000Z" },
       exercises: [
-        { exerciseId: 1, exerciseName: "Cable Row", category: "Back", weight: 50, repsAchieved: 8, prevLastReps: 8, weightIncreased: false },
+        { exerciseId: 1, exerciseName: "Cable Row", category: "Upper", weight: 50, repsAchieved: 8, prevLastReps: 8, weightIncreased: false },
       ],
     }];
     const text = generateLogText(entries);
@@ -1278,9 +1276,9 @@ describe("single-bar mode: per-set storage", () => {
   it("logging in single mode creates one SessionSet per exercise set", async () => {
     const user = userEvent.setup();
     // sets=3, single-bar mode (default)
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1294,9 +1292,9 @@ describe("single-bar mode: per-set storage", () => {
 
   it("all created SessionSets have the same repsAchieved value", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1309,9 +1307,9 @@ describe("single-bar mode: per-set storage", () => {
 
   it("exercise.lastRepsSets is populated after single-mode logging", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1323,9 +1321,9 @@ describe("single-bar mode: per-set storage", () => {
 
   it("undo in single mode removes all N created SessionSets", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1341,9 +1339,9 @@ describe("single-bar mode: per-set storage", () => {
 
   it("undo in single mode restores exercise.lastReps and lastRepsSets to pre-session values", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1362,14 +1360,14 @@ describe("single-bar mode: per-set storage", () => {
     // lastRepsSets=[10, 8, 9] → min is 8; reference bar should have 8 squares filled
     createExercise(makeExercise({
       name: "Pull Ups",
-      category: "Back",
+      category: "Upper",
       sets: 3,
       maxReps: 12,
       lastReps: 10,
       lastRepsSets: [10, 8, 9],
     }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     // In single mode, rep-square-8 should be "reference" state, rep-square-9 should be "empty"
     const repBars = screen.getAllByTestId("rep-bar");
@@ -1384,7 +1382,7 @@ describe("single-bar mode: per-set storage", () => {
 describe("mode switch mid-exercise", () => {
   it("separate→single: a fully-logged exercise stays green (done-check visible)", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     // Start in separate bars mode
@@ -1393,7 +1391,7 @@ describe("mode switch mid-exercise", () => {
     await user.click(screen.getByTestId("settings-close"));
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     const multi = screen.getAllByTestId("rep-bar-multi")[0];
     await user.click(within(multi).getByTestId("rep-square-set-0-9"));
@@ -1415,7 +1413,7 @@ describe("mode switch mid-exercise", () => {
   it("separate→single: partial exercise still shows reference bar", async () => {
     const user = userEvent.setup();
     // lastReps=8 for all sets, logging only set 0 with 9 reps
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -1423,7 +1421,7 @@ describe("mode switch mid-exercise", () => {
     await user.click(screen.getByTestId("settings-close"));
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     // Log only the first set
     const multi = screen.getAllByTestId("rep-bar-multi")[0];
@@ -1441,11 +1439,11 @@ describe("mode switch mid-exercise", () => {
 
   it("single→separate: a logged exercise stays complete (done-check visible)", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     // Log in single mode
     const bars = screen.getAllByTestId("rep-bar");
@@ -1464,11 +1462,11 @@ describe("mode switch mid-exercise", () => {
 
   it("single→separate: all bars show as filled after mode switch", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     await user.click(within(screen.getAllByTestId("rep-bar")[0]).getByTestId("rep-square-9"));
 
@@ -1486,7 +1484,7 @@ describe("mode switch mid-exercise", () => {
 
   it("separate→single: undo removes all session sets from storage", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8 }));
     renderApp();
 
     // Log all sets in separate mode
@@ -1495,7 +1493,7 @@ describe("mode switch mid-exercise", () => {
     await user.click(screen.getByTestId("settings-close"));
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     const multi = screen.getAllByTestId("rep-bar-multi")[0];
     await user.click(within(multi).getByTestId("rep-square-set-0-9"));
@@ -1517,7 +1515,7 @@ describe("mode switch mid-exercise", () => {
 
   it("separate→single: undo restores exercise to pre-session state", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sets: 3, maxReps: 12, lastReps: 8, lastRepsSets: [8, 8, 8] }));
     renderApp();
 
     await user.click(screen.getByTestId("btn-open-settings"));
@@ -1525,7 +1523,7 @@ describe("mode switch mid-exercise", () => {
     await user.click(screen.getByTestId("settings-close"));
 
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     const multi = screen.getAllByTestId("rep-bar-multi")[0];
     await user.click(within(multi).getByTestId("rep-square-set-0-9"));
@@ -1569,7 +1567,7 @@ describe("favourites", () => {
 
   it("shows empty state when no exercises are favourited", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("tab-favourites"));
     expect(screen.getByText("No favourite exercises yet.")).toBeInTheDocument();
@@ -1597,9 +1595,9 @@ describe("favourites", () => {
 
   it("toggling favourite star adds exercise to favourites tab", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-favourite"));
     await user.click(screen.getByTestId("tab-favourites"));
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
@@ -1607,7 +1605,7 @@ describe("favourites", () => {
 
   it("toggling favourite star again removes exercise from favourites tab", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", isFavourite: true }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", isFavourite: true }));
     renderApp();
     await user.click(screen.getByTestId("tab-favourites"));
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
@@ -1619,7 +1617,7 @@ describe("favourites", () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Star Me" }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     const card = screen.getByTestId(`exercise-card-${ex.id}`);
     await user.click(within(card).getByTestId("btn-favourite"));
     expect(getExercises().find((e) => e.id === ex.id)?.isFavourite).toBe(true);
@@ -1629,7 +1627,7 @@ describe("favourites", () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Unstar Me" }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     const card = screen.getByTestId(`exercise-card-${ex.id}`);
     await user.click(within(card).getByTestId("btn-favourite"));
     await user.click(within(card).getByTestId("btn-favourite"));
@@ -1667,7 +1665,7 @@ describe("favourites", () => {
 
   it("favourite exercises are active during a session", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", isFavourite: true }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", isFavourite: true }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("tab-favourites"));
@@ -1679,9 +1677,9 @@ describe("favourites", () => {
 
   it("persists isFavourite in storage", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-favourite"));
     const stored = getExercises().find((e) => e.id === ex.id);
     expect(stored?.isFavourite).toBe(true);
@@ -1691,7 +1689,7 @@ describe("favourites", () => {
     const user = userEvent.setup();
     renderApp();
     // Open edit sheet for the first exercise on Back tab
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getAllByTestId("btn-edit")[0]);
     const select = screen.getByTestId("edit-category") as HTMLSelectElement;
     const options = Array.from(select.options).map((o) => o.value);
@@ -1703,20 +1701,20 @@ describe("favourites", () => {
 
 describe("tempo", () => {
   it("displays tempo on exercise card when set", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", tempo: "2-1-3" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", tempo: "2-1-3" }));
     renderApp();
     expect(screen.getByText(/tempo: 2-1-3/)).toBeInTheDocument();
   });
 
   it("does not show tempo text when not set", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     expect(screen.queryByText(/tempo:/)).not.toBeInTheDocument();
   });
 
   it("can set tempo via edit sheet", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-edit"));
     await user.type(screen.getByTestId("edit-tempo"), "3-1-2");
@@ -1731,7 +1729,7 @@ describe("tempo", () => {
 describe("session summary", () => {
   it("shows session summary with exercise count after ending session", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-9"));
@@ -1744,7 +1742,7 @@ describe("session summary", () => {
 
   it("shows empty message when no exercises were logged", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("btn-end-session"));
@@ -1754,7 +1752,7 @@ describe("session summary", () => {
 
   it("summary closes when Done is clicked", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("btn-end-session"));
@@ -1775,7 +1773,7 @@ describe("session counter", () => {
 
   it("counter shows 0 when session starts", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     expect(screen.getByTestId("session-counter")).toHaveTextContent("0");
@@ -1783,7 +1781,7 @@ describe("session counter", () => {
 
   it("counter increments when an exercise is logged", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-8"));
@@ -1792,7 +1790,7 @@ describe("session counter", () => {
 
   it("counter decrements when a logged exercise is undone", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-8"));
@@ -1808,7 +1806,7 @@ describe("session counter", () => {
 describe("weight prompt", () => {
   it("shows weight prompt when max reps are tapped", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
@@ -1817,7 +1815,7 @@ describe("weight prompt", () => {
 
   it("cancelling weight prompt clears the pending log", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
@@ -1831,7 +1829,7 @@ describe("weight prompt", () => {
 
   it("confirming weight prompt logs the set and updates weight", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
@@ -1845,7 +1843,7 @@ describe("weight prompt", () => {
 
   it("lower button shows weight decrease prompt", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("btn-decrease-weight"));
@@ -1854,7 +1852,7 @@ describe("weight prompt", () => {
 
   it("confirming weight increase stores previousWeight in storage", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
@@ -1868,7 +1866,7 @@ describe("weight prompt", () => {
 
   it("confirming weight decrease stores previousWeight in storage", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("btn-decrease-weight"));
@@ -1884,13 +1882,13 @@ describe("weight prompt", () => {
 
 describe("weight context display", () => {
   it("shows dumbbell icon on every exercise card", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
     renderApp();
     expect(screen.getByTestId("icon-dumbbell")).toBeInTheDocument();
   });
 
   it("shows '(was Xkg)' when previousWeight is set from a prior session", () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 30 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 30 }));
     updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 999 });
     renderApp();
     expect(screen.getByTestId("previous-weight")).toHaveTextContent("(was 28kg)");
@@ -1898,7 +1896,7 @@ describe("weight context display", () => {
 
   it("does not show '(was Xkg)' when weight was changed in the current session", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 10, maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
@@ -1910,7 +1908,7 @@ describe("weight context display", () => {
   });
 
   it("shows '(was Xkg)' with lbs when weight unit is lbs", () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 30 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 30 }));
     updateExercise(ex.id, { previousWeight: 25, weightChangedInSession: 999 });
     saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
@@ -1918,7 +1916,7 @@ describe("weight context display", () => {
   });
 
   it("does not show '(was Xkg)' when previousWeight is not set", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back", weight: 20 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
     renderApp();
     expect(screen.queryByTestId("previous-weight")).not.toBeInTheDocument();
   });
@@ -1929,7 +1927,7 @@ describe("weight context display", () => {
 describe("add exercise", () => {
   it("add exercise button not visible on retired tab", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
     await user.click(screen.getByTestId("tab-retired"));
@@ -1971,7 +1969,7 @@ describe("add category", () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(screen.getByTestId("btn-add-category"));
-    await user.type(screen.getByTestId("add-category-input"), "Back");
+    await user.type(screen.getByTestId("add-category-input"), "Upper");
     await user.click(screen.getByTestId("add-category-confirm"));
     expect(screen.getByTestId("add-category-error")).toHaveTextContent("A category with that name already exists.");
   });
@@ -2022,7 +2020,7 @@ describe("remove empty group", () => {
 
 describe("deleteSessionSetById", () => {
   it("removes a single set by ID without affecting others", () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     const session = startSession();
     const set1 = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 0, repsAchieved: 8 });
     const set2 = logSet({ sessionId: session.id, exerciseId: ex.id, weight: 0, repsAchieved: 9 });
@@ -2038,7 +2036,7 @@ describe("deleteSessionSetById", () => {
 describe("exercise edit: retire and delete", () => {
   it("retire toggle from edit sheet moves exercise to retired", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-edit"));
     await user.click(screen.getByTestId("btn-retire-toggle"));
@@ -2049,7 +2047,7 @@ describe("exercise edit: retire and delete", () => {
 
   it("delete button only shows for retired exercises", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-edit"));
     expect(screen.queryByTestId("btn-delete")).not.toBeInTheDocument();
@@ -2057,7 +2055,7 @@ describe("exercise edit: retire and delete", () => {
 
   it("deleting a retired exercise removes it from storage", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
     await user.click(screen.getByTestId("tab-retired"));
@@ -2073,7 +2071,7 @@ describe("exercise edit: retire and delete", () => {
 describe("lastTrend storage persistence", () => {
   it("saves lastTrend to storage when exercise is logged up", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastReps: 8, maxReps: 12 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-9"));
@@ -2083,7 +2081,7 @@ describe("lastTrend storage persistence", () => {
 
   it("saves lastTrend as down when reps decline", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastReps: 8, maxReps: 12 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-7"));
@@ -2093,7 +2091,7 @@ describe("lastTrend storage persistence", () => {
 
   it("saves lastTrend as null when reps are equal", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastReps: 8, maxReps: 12 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-8"));
@@ -2103,7 +2101,7 @@ describe("lastTrend storage persistence", () => {
 
   it("restores lastTrend on undo", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back", lastReps: 8, maxReps: 12, lastTrend: "down" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", lastReps: 8, maxReps: 12, lastTrend: "down" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-9"));
@@ -2118,21 +2116,21 @@ describe("lastTrend storage persistence", () => {
 
 describe("days since last done", () => {
   it("does not show days badge when exercise has never been done", () => {
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     expect(screen.queryByTestId("days-since-last-done")).not.toBeInTheDocument();
   });
 
   it("does not show days badge during current session", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     expect(screen.queryByTestId("days-since-last-done")).not.toBeInTheDocument();
   });
 
   it("shows days badge when exercise was done in a previous session", async () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
 
     // Create a previous session
     const oldSession = startSession();
@@ -2152,7 +2150,7 @@ describe("days since last done", () => {
   });
 
   it("shows 0d when exercise was done earlier today in a previous session", async () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
 
     // Create a previous session today
     const todaySession = startSession();
@@ -2166,7 +2164,7 @@ describe("days since last done", () => {
 
   it("does not show days badge for current session, even after logging", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
 
     // Create a previous session
     const oldSession = startSession();
@@ -2189,7 +2187,7 @@ describe("days since last done", () => {
   });
 
   it("shows days from most recent session when multiple past sessions exist", async () => {
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper" }));
 
     // Create first session 10 days ago
     const session1 = startSession();
@@ -2225,19 +2223,19 @@ describe("tab-switch preserves exercise completion state", () => {
   it("an exercise logged on one tab still shows as done after switching away and back", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
-    // Log 8 reps on the first exercise (Pull Ups, maxReps=12, so no weight prompt)
+    // Log 6 reps on the first exercise (Bench Press, maxReps=8, so use 6 to avoid weight prompt)
     const repBar = screen.getAllByTestId("rep-bar")[0];
-    await user.click(within(repBar).getByTestId("rep-square-8"));
+    await user.click(within(repBar).getByTestId("rep-square-6"));
 
     // Verify it's marked done before switching
     expect(screen.getAllByTestId("done-check").length).toBeGreaterThan(0);
 
     // Switch to a different tab and back
-    await user.click(screen.getByTestId("tab-chest"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-lower"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     // The done state must survive the remount
     expect(screen.getAllByTestId("done-check").length).toBeGreaterThan(0);
@@ -2246,14 +2244,14 @@ describe("tab-switch preserves exercise completion state", () => {
   it("session counter reflects previously logged exercises after a tab switch", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-upper"));
     await user.click(screen.getByTestId("btn-start-session"));
 
     const repBar = screen.getAllByTestId("rep-bar")[0];
-    await user.click(within(repBar).getByTestId("rep-square-8"));
+    await user.click(within(repBar).getByTestId("rep-square-6"));
 
-    await user.click(screen.getByTestId("tab-chest"));
-    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("tab-lower"));
+    await user.click(screen.getByTestId("tab-upper"));
 
     // Counter should still show at least 1
     expect(screen.getByTestId("session-counter")).toHaveTextContent("1");

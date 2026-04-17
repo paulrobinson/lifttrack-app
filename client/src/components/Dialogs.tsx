@@ -200,8 +200,8 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
   const sheetCategories = getCategories();
   const [name, setName] = useState(exercise?.name ?? "");
   const [weight, setWeight] = useState(exercise ? String(exercise.weight) : "");
-  const [maxReps, setMaxReps] = useState(exercise ? String(exercise.maxReps) : "");
-  const [sets, setSets] = useState(exercise ? String(exercise.sets) : "");
+  const [maxReps, setMaxReps] = useState(exercise ? String(exercise.maxReps) : "12");
+  const [sets, setSets] = useState(exercise ? String(exercise.sets) : "3");
   const [category, setCategory] = useState<string>(exercise?.category ?? defaultCategory ?? sheetCategories[0] ?? "Back");
   const [tempo, setTempo] = useState(exercise?.tempo ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -240,11 +240,11 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
           </div>
           <div className="edit-field">
             <label>Max Reps</label>
-            <input type="number" inputMode="numeric" value={maxReps} onChange={(e) => setMaxReps(e.target.value)} placeholder="e.g. 12" data-testid="edit-max-reps" />
+            <input type="number" inputMode="numeric" value={maxReps} onChange={(e) => setMaxReps(e.target.value)} data-testid="edit-max-reps" />
           </div>
           <div className="edit-field">
             <label>Sets</label>
-            <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(e.target.value)} placeholder="e.g. 3" data-testid="edit-sets" />
+            <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(e.target.value)} data-testid="edit-sets" />
           </div>
           <div className="edit-field">
             <label>Group</label>

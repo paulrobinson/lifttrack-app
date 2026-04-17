@@ -39,6 +39,8 @@ import { ImportButton, ExportModal } from "@/components/ImportExport";
 import { SessionHistoryPanel } from "@/components/SessionHistory";
 import { ExerciseCard, SortableExerciseCard } from "@/components/ExerciseCard";
 import { SettingsPanel, AddCategoryDialog, SessionSummary, ExerciseSheet } from "@/components/Dialogs";
+import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/hooks/use-toast";
 import type { SetLog } from "@/components/types";
 
 // Re-export functions/types used by tests
@@ -56,6 +58,8 @@ const FAVOURITES_TAB = "Favourites";
 
 export default function LiftTracker() {
   useEffect(() => { initStorage(); }, []);
+
+  const { toast } = useToast();
 
   const [exercises, setExercises] = useState<Exercise[]>(() => {
     initStorage();
@@ -77,6 +81,7 @@ export default function LiftTracker() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [droppedId, setDroppedId] = useState<number | null>(null);
+  const [newlyAddedId, setNewlyAddedId] = useState<number | null>(null);
   const [confirmRemoveGroup, setConfirmRemoveGroup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => getSettings());
@@ -128,7 +133,7 @@ export default function LiftTracker() {
     const category = data.category ?? categories[0] ?? "Back";
     const catExercises = exercises.filter((ex) => ex.category === category && !ex.archived);
     const maxSortOrder = catExercises.length > 0 ? Math.max(...catExercises.map((ex) => ex.sortOrder)) : -1;
-    createExercise({
+    const newExercise = createExercise({
       name: data.name ?? "New Exercise",
       category,
       weight: data.weight ?? 0,
@@ -142,7 +147,29 @@ export default function LiftTracker() {
     refreshExercises();
     setActiveTab(category);
     setShowAddSheet(false);
+
+    // Show toast notification
+    toast({
+      title: `${newExercise.name} added to ${category}`,
+    });
+
+    // Trigger flash animation
+    setNewlyAddedId(newExercise.id);
+    setTimeout(() => setNewlyAddedId(null), 700);
   };
+
+  // Auto-scroll to newly added exercise
+  useEffect(() => {
+    if (newlyAddedId !== null) {
+      // Wait for next frame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        const element = document.querySelector(`[data-exercise-id="${newlyAddedId}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
+    }
+  }, [newlyAddedId]);
 
   const handleDragStart = useCallback((_event: DragStartEvent) => {
     setIsReordering(true);
@@ -437,7 +464,7 @@ export default function LiftTracker() {
                   key={`${ex.id}-${activeSession?.id ?? "idle"}`}
                   exercise={ex}
                   isReordering={isReordering}
-                  isDropped={droppedId === ex.id}
+                  isDropped={droppedId === ex.id || newlyAddedId === ex.id}
                   isActive={isActive && !ex.archived}
                   sessionId={activeSession?.id ?? null}
                   onSetLogged={handleSetLogged}
@@ -580,6 +607,8 @@ export default function LiftTracker() {
           onClose={() => setShowAddSheet(false)}
         />
       )}
+
+      <Toaster />
     </div>
   );
 }

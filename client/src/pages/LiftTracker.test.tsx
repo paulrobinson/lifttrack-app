@@ -195,6 +195,60 @@ describe("add exercise", () => {
     await user.click(screen.getByTestId("edit-save"));
     expect(screen.getByText("My Custom Lift")).toBeInTheDocument();
   });
+
+  it("shows toast notification after adding an exercise", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Bench Press");
+    await user.click(screen.getByTestId("edit-save"));
+    await waitFor(() => {
+      expect(screen.getByText(/Bench Press added to/i)).toBeInTheDocument();
+    });
+  });
+
+  it("highlights newly added exercise with green flash animation", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Deadlift");
+    await user.click(screen.getByTestId("edit-save"));
+
+    // Find the newly added exercise
+    const newExercise = getExercises().find((e) => e.name === "Deadlift");
+    expect(newExercise).toBeDefined();
+
+    // Check that the exercise card has the drop-confirm animation class
+    await waitFor(() => {
+      const exerciseElement = document.querySelector(`[data-exercise-id="${newExercise!.id}"]`);
+      expect(exerciseElement).toBeInTheDocument();
+      const animatedDiv = exerciseElement?.querySelector(".exercise-drop-confirm");
+      expect(animatedDiv).toBeInTheDocument();
+    });
+  });
+
+  it("scrolls to newly added exercise", async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-add-exercise"));
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Squat");
+    await user.click(screen.getByTestId("edit-save"));
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: "smooth",
+          block: "center",
+        })
+      );
+    });
+  });
 });
 
 // ─── Export modal ─────────────────────────────────────────────────────────────

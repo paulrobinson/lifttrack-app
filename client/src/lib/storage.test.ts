@@ -759,3 +759,46 @@ describe("getDaysSinceLastDone", () => {
     expect(getDaysSinceLastDone(ex.id, currentSession.id)).toBe(3);
   });
 });
+
+// ─── isFavourite ──────────────────────────────────────────────────────────────
+
+describe("isFavourite field", () => {
+  it("is not set (undefined) by default when creating an exercise", () => {
+    const ex = createExercise(makeExercise());
+    expect(ex.isFavourite).toBeUndefined();
+  });
+
+  it("can be set to true via updateExercise and persists in storage", () => {
+    const ex = createExercise(makeExercise());
+    updateExercise(ex.id, { isFavourite: true });
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.isFavourite).toBe(true);
+  });
+
+  it("can be toggled back to false via updateExercise", () => {
+    const ex = createExercise(makeExercise());
+    updateExercise(ex.id, { isFavourite: true });
+    updateExercise(ex.id, { isFavourite: false });
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.isFavourite).toBe(false);
+  });
+
+  it("setting isFavourite does not alter other exercise fields", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", weight: 20, sets: 3 }));
+    updateExercise(ex.id, { isFavourite: true });
+    const stored = getExercises().find((e) => e.id === ex.id)!;
+    expect(stored.name).toBe("Curl");
+    expect(stored.weight).toBe(20);
+    expect(stored.sets).toBe(3);
+  });
+
+  it("replaceExercises produces exercises without isFavourite set", () => {
+    // Favourite an existing exercise, then replace the whole list
+    const ex = createExercise(makeExercise());
+    updateExercise(ex.id, { isFavourite: true });
+    replaceExercises([makeExercise({ name: "Fresh" })]);
+    const all = getExercises();
+    expect(all).toHaveLength(1);
+    expect(all[0].isFavourite).toBeFalsy();
+  });
+});

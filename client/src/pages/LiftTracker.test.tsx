@@ -1372,6 +1372,26 @@ describe("favourites", () => {
     expect(screen.getByText("No favourite exercises yet.")).toBeInTheDocument();
   });
 
+  it("does not show the Add Exercise button on the Favourites tab", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.queryByTestId("btn-add-exercise")).not.toBeInTheDocument();
+  });
+
+  it("does not show the remove-group button on the Favourites tab", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.queryByTestId("btn-remove-group")).not.toBeInTheDocument();
+  });
+
+  it("every exercise card renders a favourite toggle button", () => {
+    renderApp();
+    const btns = screen.getAllByTestId("btn-favourite");
+    expect(btns.length).toBeGreaterThan(0);
+  });
+
   it("toggling favourite star adds exercise to favourites tab", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
@@ -1390,6 +1410,56 @@ describe("favourites", () => {
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
     await user.click(screen.getByTestId("btn-favourite"));
     expect(screen.getByText("No favourite exercises yet.")).toBeInTheDocument();
+  });
+
+  it("clicking the star button sets isFavourite in storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Star Me" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-favourite"));
+    expect(getExercises().find((e) => e.id === ex.id)?.isFavourite).toBe(true);
+  });
+
+  it("clicking the star a second time clears isFavourite in storage", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Unstar Me" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-favourite"));
+    await user.click(within(card).getByTestId("btn-favourite"));
+    expect(getExercises().find((e) => e.id === ex.id)?.isFavourite).toBe(false);
+  });
+
+  it("a pre-favourited exercise appears on the Favourites tab", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Already Starred" }));
+    updateExercise(ex.id, { isFavourite: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.getByText("Already Starred")).toBeInTheDocument();
+  });
+
+  it("a non-favourited exercise is absent from the Favourites tab", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Not Starred" }));
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.queryByText("Not Starred")).not.toBeInTheDocument();
+  });
+
+  it("un-favouriting an exercise removes it from the Favourites tab view", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Will Unstar" }));
+    updateExercise(ex.id, { isFavourite: true });
+    renderApp();
+    await user.click(screen.getByTestId("tab-favourites"));
+    expect(screen.getByText("Will Unstar")).toBeInTheDocument();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-favourite"));
+    expect(screen.queryByText("Will Unstar")).not.toBeInTheDocument();
   });
 
   it("favourite exercises are active during a session", async () => {
@@ -1412,6 +1482,17 @@ describe("favourites", () => {
     await user.click(screen.getByTestId("btn-favourite"));
     const stored = getExercises().find((e) => e.id === ex.id);
     expect(stored?.isFavourite).toBe(true);
+  });
+
+  it("the exercise edit category dropdown does not contain 'Favourites'", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    // Open edit sheet for the first exercise on Back tab
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getAllByTestId("btn-edit")[0]);
+    const select = screen.getByTestId("edit-category") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.value);
+    expect(options).not.toContain("Favourites");
   });
 });
 
@@ -1861,5 +1942,46 @@ describe("days since last done", () => {
     expect(screen.getByTestId("days-since-last-done")).toBeInTheDocument();
     // Should show 3d (most recent), not 10d
     expect(screen.getByTestId("days-since-last-done").textContent).toBe("3d");
+  });
+});
+
+// ─── Tab-switch completion state ──────────────────────────────────────────────
+
+describe("tab-switch preserves exercise completion state", () => {
+  it("an exercise logged on one tab still shows as done after switching away and back", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    // Log 8 reps on the first exercise (Pull Ups, maxReps=12, so no weight prompt)
+    const repBar = screen.getAllByTestId("rep-bar")[0];
+    await user.click(within(repBar).getByTestId("rep-square-8"));
+
+    // Verify it's marked done before switching
+    expect(screen.getAllByTestId("done-check").length).toBeGreaterThan(0);
+
+    // Switch to a different tab and back
+    await user.click(screen.getByTestId("tab-chest"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // The done state must survive the remount
+    expect(screen.getAllByTestId("done-check").length).toBeGreaterThan(0);
+  });
+
+  it("session counter reflects previously logged exercises after a tab switch", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("tab-back"));
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    const repBar = screen.getAllByTestId("rep-bar")[0];
+    await user.click(within(repBar).getByTestId("rep-square-8"));
+
+    await user.click(screen.getByTestId("tab-chest"));
+    await user.click(screen.getByTestId("tab-back"));
+
+    // Counter should still show at least 1
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
   });
 });

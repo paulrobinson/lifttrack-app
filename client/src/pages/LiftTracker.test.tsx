@@ -46,6 +46,20 @@ describe("initial render", () => {
     // At least one default exercise name should appear
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
   });
+
+  it("shows sets count as a labeled value like '3 sets'", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 3 }));
+    renderApp();
+    const card = screen.getByTestId("exercise-card-1");
+    expect(within(card).getByText("3 sets")).toBeInTheDocument();
+  });
+
+  it("shows singular 'set' label when exercise has 1 set", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Back", sets: 1 }));
+    renderApp();
+    const card = screen.getByTestId("exercise-card-1");
+    expect(within(card).getByText("1 set")).toBeInTheDocument();
+  });
 });
 
 // ─── Tab navigation ───────────────────────────────────────────────────────────

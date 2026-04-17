@@ -449,7 +449,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             {exercise.name}
           </h2>
           <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", flexShrink: 0 }}>
-            ×{exercise.sets}
+            {exercise.sets} {exercise.sets === 1 ? "set" : "sets"}
           </span>
           <div style={{ flex: 1 }} />
           {daysSinceLastDone !== null && (

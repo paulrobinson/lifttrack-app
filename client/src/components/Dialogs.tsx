@@ -334,7 +334,7 @@ export function SessionSummary({ logs, onClose, weightUnit = "kg" }: { logs: Set
             <div className="summary-row" key={i}>
               <div>
                 <span style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{log.exerciseName}</span>
-                <span style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginLeft: "5px" }}>×{log.sets}</span>
+                <span style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginLeft: "5px" }}>{log.sets} {log.sets === 1 ? "set" : "sets"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>

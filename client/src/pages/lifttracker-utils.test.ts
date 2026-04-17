@@ -105,6 +105,15 @@ describe("parseImportText", () => {
 // ─── buildExportText ──────────────────────────────────────────────────────────
 
 describe("buildExportText", () => {
+  it("does not include isFavourite in the output text", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", isFavourite: true }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).not.toContain("isFavourite");
+    expect(text).not.toContain("favourite");
+  });
+
   it("includes all non-archived exercises", () => {
     const exercises: Exercise[] = [
       makeExercise({ id: 1, name: "Pull Ups", category: "Back" }),
@@ -199,6 +208,15 @@ describe("encodeState / decodeState", () => {
     const code = await encodeState(exercises);
     const decoded = await decodeState(code);
     expect(decoded).toEqual(exercises);
+  });
+
+  it("strips isFavourite so decoded exercises never carry favourite status", async () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", isFavourite: true }),
+    ];
+    const code = await encodeState(exercises);
+    const decoded = await decodeState(code);
+    expect((decoded[0] as Exercise & { isFavourite?: boolean }).isFavourite).toBeUndefined();
   });
 
   it("produces a string with no characters that break WhatsApp/SMS (+, /, =)", async () => {

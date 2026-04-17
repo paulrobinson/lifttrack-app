@@ -116,7 +116,7 @@ export function getCategorySummary(exercises: HistoryExerciseEntry[]): string | 
 
 // ─── Export ────────────────────────────────────────────────────────────────────
 
-export function generateLogText(entries: HistorySessionEntry[]): string {
+export function generateLogText(entries: HistorySessionEntry[], weightUnit: "kg" | "lbs" = "kg"): string {
   if (entries.length === 0) return "No completed sessions.";
 
   const lines: string[] = ["Exercise Log", "============", ""];
@@ -147,7 +147,7 @@ export function generateLogText(entries: HistorySessionEntry[]): string {
       const isDown = prev > 0 && ex.repsAchieved < prev;
       const trend = isUp ? " ↑" : isDown ? " ↓" : "";
       const weightNote = ex.weightIncreased ? " (↑wt)" : "";
-      lines.push(`  ${ex.exerciseName.padEnd(35)} ${ex.weight}kg × ${ex.repsAchieved}${trend}${weightNote}`);
+      lines.push(`  ${ex.exerciseName.padEnd(35)} ${ex.weight}${weightUnit} × ${ex.repsAchieved}${trend}${weightNote}`);
     }
 
     lines.push("");
@@ -158,8 +158,8 @@ export function generateLogText(entries: HistorySessionEntry[]): string {
   return lines.join("\n");
 }
 
-function downloadLog(entries: HistorySessionEntry[]) {
-  const text = generateLogText(entries);
+function downloadLog(entries: HistorySessionEntry[], weightUnit: "kg" | "lbs" = "kg") {
+  const text = generateLogText(entries, weightUnit);
   const blob = new Blob([text], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -171,13 +171,14 @@ function downloadLog(entries: HistorySessionEntry[]) {
 
 // ─── Session Log Card ───────────────────────────────────────────────────────────
 
-function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive, onDelete }: {
+function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive, onDelete, weightUnit = "kg" }: {
   entry: HistorySessionEntry;
   showArchive: boolean;
   showDelete: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
+  weightUnit?: "kg" | "lbs";
 }) {
   const { session, exercises } = entry;
   const startDate = new Date(session.startedAt);
@@ -242,7 +243,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
                 {ex.exerciseName}
               </span>
               <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", minWidth: "76px", textAlign: "right" }}>
-                {ex.weight}kg × {ex.repsAchieved}
+                {ex.weight}{weightUnit} × {ex.repsAchieved}
               </span>
               <div style={{ width: "30px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", flexShrink: 0 }}>
                 {ex.weightIncreased && (
@@ -318,7 +319,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
 
 // ─── Session History Panel ──────────────────────────────────────────────────────
 
-export function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
+export function SessionHistoryPanel({ onClose, weightUnit = "kg" }: { onClose: () => void; weightUnit?: "kg" | "lbs" }) {
   const [historyData, setHistoryData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
   const [view, setView] = useState<"active" | "archive">("active");
 
@@ -340,7 +341,7 @@ export function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {historyData.length > 0 && (
               <button
-                onClick={() => downloadLog(historyData)}
+                onClick={() => downloadLog(historyData, weightUnit)}
                 data-testid="btn-download-log"
                 style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", background: "none", border: "1px solid var(--color-border)", borderRadius: "6px", cursor: "pointer", padding: "3px 8px", fontWeight: 600 }}
               >
@@ -392,6 +393,7 @@ export function SessionHistoryPanel({ onClose }: { onClose: () => void }) {
               onArchive={() => handleArchive(entry.session.id)}
               onUnarchive={() => handleUnarchive(entry.session.id)}
               onDelete={() => handleDelete(entry.session.id)}
+              weightUnit={weightUnit}
             />
           ))
         )}

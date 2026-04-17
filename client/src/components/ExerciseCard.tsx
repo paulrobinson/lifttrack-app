@@ -163,8 +163,8 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
 
 // ─── Weight Prompt ──────────────────────────────────────────────────────────────
 
-function WeightPrompt({ label, onConfirm, onCancel }: {
-  label: string; onConfirm: (w: number) => void; onCancel: () => void;
+function WeightPrompt({ label, onConfirm, onCancel, weightUnit = "kg" }: {
+  label: string; onConfirm: (w: number) => void; onCancel: () => void; weightUnit?: "kg" | "lbs";
 }) {
   const [value, setValue] = useState("");
   const confirm = () => { const w = parseFloat(value); if (!isNaN(w) && w > 0) onConfirm(w); };
@@ -175,7 +175,7 @@ function WeightPrompt({ label, onConfirm, onCancel }: {
         placeholder="e.g. 32.5" value={value} onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }}
         data-testid="weight-prompt-input" />
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>kg</span>
+      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>{weightUnit}</span>
       <button className="btn-confirm" onClick={confirm} data-testid="weight-prompt-confirm">✓</button>
       <button className="btn-cancel-prompt" onClick={onCancel} data-testid="weight-prompt-cancel">✕</button>
     </div>
@@ -482,7 +482,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
-            <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}kg</strong>
+            <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}{settings.weightUnit}</strong>
             {isSingleMode ? (
               loggedReps !== null && <span> · {loggedReps} rep{loggedReps !== 1 ? "s" : ""}</span>
             ) : (
@@ -558,6 +558,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {showWeightPrompt !== null && (
           <WeightPrompt
             label={showWeightPrompt === "increase" ? "New weight:" : "New (lower) weight:"}
+            weightUnit={settings.weightUnit}
             onConfirm={handleWeightConfirm}
             onCancel={() => {
               if (!isSingleMode && pendingSetIdx !== null) {
@@ -582,6 +583,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       {showEdit && (
         <ExerciseSheet
           exercise={exercise}
+          weightUnit={settings.weightUnit}
           onSave={handleEditSave}
           onClose={() => setShowEdit(false)}
           onRetireToggle={() => {

@@ -19,9 +19,10 @@ export interface Exercise {
 
 export interface Settings {
   showSeparateBars: boolean;
+  weightUnit: "kg" | "lbs";
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg" };
 
 export interface Session {
   id: number;

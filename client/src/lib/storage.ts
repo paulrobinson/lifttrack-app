@@ -57,7 +57,7 @@ const KEYS = {
   settings:    `${_prefix}lt_settings`,
 } as const;
 
-export const DEFAULT_CATEGORIES = ["Back", "Chest", "Upper", "Legs"];
+export const DEFAULT_CATEGORIES = ["Upper", "Lower"];
 
 // ─── ID generator ────────────────────────────────────────────────────────────
 
@@ -95,37 +95,12 @@ function buildSeeds(): Exercise[] {
 
   return [
     // ── Upper ──
-    ex("DB Row (Chest Supported)", "Upper", 28, 12, 3, 8),
-    ex("Unilateral Cable Row",     "Upper", 50, 12, 3, 8),
-    ex("Standing Cable Flys",      "Upper", 18, 12, 5, 8),
-    ex("Cable Pushdown",           "Upper", 32, 15, 3, 8),
-    ex("Chin-ups",                 "Upper",  0, 15, 2, 7),
-    ex("BB Curls",                 "Upper", 20, 12, 2, 8),
-    ex("DB Shrugs",                "Upper", 24, 12, 3, 8),
+    ex("Bench Press", "Upper", 60, 8, 3, 8),
+    ex("Pull Ups",    "Upper",  0, 12, 3, 6),
 
-    // ── Chest ──
-    ex("Pec Deck",            "Chest", 86, 12, 4, 9),
-    ex("DB Flys",             "Chest", 12, 15, 3, 12),
-    ex("DB Press",            "Chest", 22,  8, 3, 8),
-    ex("DB Shoulder Press",   "Chest", 16, 12, 3, 8),
-    ex("DB Lateral Raises",   "Chest",  4, 20, 3, 8),
-    ex("Roll Outs",           "Chest",  0, 15, 3, 8),
-
-    // ── Back ──
-    ex("Pull Ups",                  "Back",  0, 12, 3, 6),
-    ex("DB Rows",                   "Back", 30,  8, 3, 8),
-    ex("Cable Row",                 "Back", 59, 12, 3, 8),
-    ex("Close Grip Lat Pull-down",  "Back", 45, 15, 2, 8),
-    ex("Rear Delt Fly",             "Back", 45, 20, 3, 15),
-    ex("Face Pulls",                "Back", 36, 15, 3, 8),
-
-    // ── Legs ──
-    ex("BB RDL",                "Legs", 60,  8, 3, 8),
-    ex("Front Squat",           "Legs", 60,  8, 3, 6),
-    ex("Back Squat",            "Legs", 60,  8, 3, 6),
-    ex("BB Bulgarian Squats",   "Legs", 30,  8, 3, 8),
-    ex("Unilateral Leg Curl",   "Legs", 14,  8, 3, 7),
-    ex("Ab Crunch Machine",     "Legs", 38, 12, 3, 10),
+    // ── Lower ──
+    ex("Back Squat", "Lower", 60, 8, 3, 6),
+    ex("Leg Curls",  "Lower", 30, 12, 3, 8),
   ];
 }
 

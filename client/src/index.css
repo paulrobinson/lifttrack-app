@@ -516,6 +516,11 @@
     appearance: none;
   }
 
+  .edit-field input::placeholder {
+    color: var(--color-text-faint);
+    font-weight: 400;
+  }
+
   .edit-field input:focus,
   .edit-field select:focus {
     border-color: var(--color-success);

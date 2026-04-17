@@ -257,10 +257,12 @@ export function endSession(id: number): Session {
   );
   save(KEYS.sessions, updated);
 
-  // Clear "was X" weight indicators — they only display for one session
+  // Clear "was X" weight indicators that were already displayed this session.
+  // Keep indicators where the weight was changed in this very session — they
+  // haven't been shown yet and should appear in the next session.
   const exercises = getExercises();
   const cleared = exercises.map((ex) =>
-    ex.previousWeight != null
+    ex.previousWeight != null && ex.weightChangedInSession !== id
       ? { ...ex, previousWeight: null, weightChangedInSession: null }
       : ex
   );

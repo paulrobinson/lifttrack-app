@@ -15,7 +15,7 @@ import {
   getSessionSets,
   getDaysSinceLastDone,
 } from "@/lib/storage";
-import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty, IconDumbbell } from "./icons";
+import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
 import type { SetLog } from "./types";
 
@@ -483,7 +483,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
-            <span style={{ color: "var(--color-text-muted)", verticalAlign: "middle", marginRight: "3px" }} data-testid="icon-dumbbell"><IconDumbbell /></span>
+            <span style={{ marginRight: "2px" }} data-testid="icon-dumbbell">🏋️</span>
             <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{exercise.weight}{settings.weightUnit}</strong>
             {exercise.previousWeight != null && exercise.weightChangedInSession !== sessionId && (
               <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }} data-testid="previous-weight"> (was {exercise.previousWeight}{settings.weightUnit})</span>

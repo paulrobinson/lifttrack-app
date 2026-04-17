@@ -86,14 +86,6 @@ export function IconStarEmpty() {
   );
 }
 
-export function IconDumbbell() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 5v14M18 5v14M3 8h3M3 16h3M18 8h3M18 16h3M6 8h12M6 16h12" />
-    </svg>
-  );
-}
-
 export function IconSettings() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -199,8 +199,20 @@ describe("endSession", () => {
     expect(getActiveSession()).toBeNull();
   });
 
-  it("clears previousWeight for all exercises on session end", () => {
+  it("preserves previousWeight when weight was changed in the session being ended", () => {
     const ex = createExercise(makeExercise({ weight: 30 }));
+    const session = startSession();
+    // weight was changed in this session
+    updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: session.id });
+    endSession(session.id);
+    const stored = getExercises().find((e) => e.id === ex.id);
+    expect(stored?.previousWeight).toBe(28);
+    expect(stored?.weightChangedInSession).toBe(session.id);
+  });
+
+  it("clears previousWeight when weight was changed in a prior session", () => {
+    const ex = createExercise(makeExercise({ weight: 30 }));
+    // weight was changed in a different session (id 99)
     updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 99 });
     const session = startSession();
     endSession(session.id);

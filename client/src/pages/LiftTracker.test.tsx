@@ -74,29 +74,29 @@ describe("tab navigation", () => {
   });
 });
 
-// ─── Archive tab ──────────────────────────────────────────────────────────────
+// ─── Retired tab ──────────────────────────────────────────────────────────────
 
-describe("archive tab", () => {
-  it("shows the Archive tab when at least one exercise is archived", () => {
+describe("retired tab", () => {
+  it("shows the Retired tab when at least one exercise is retired", () => {
     const ex = createExercise(makeExercise());
     updateExercise(ex.id, { archived: true });
     renderApp();
-    expect(screen.getByTestId("tab-archive")).toBeInTheDocument();
+    expect(screen.getByTestId("tab-retired")).toBeInTheDocument();
   });
 
-  it("shows archived exercises on the Archive tab", async () => {
+  it("shows retired exercises on the Retired tab", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Retired Move" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
-    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("tab-retired"));
     expect(screen.getByText("Retired Move")).toBeInTheDocument();
   });
 
-  it("does not show the Archive tab when no exercises are archived", () => {
+  it("does not show the Retired tab when no exercises are retired", () => {
     renderApp();
-    // All default exercises are non-archived, so Archive tab is hidden
-    expect(screen.queryByTestId("tab-archive")).not.toBeInTheDocument();
+    // All default exercises are not retired, so Retired tab is hidden
+    expect(screen.queryByTestId("tab-retired")).not.toBeInTheDocument();
   });
 });
 
@@ -343,13 +343,13 @@ describe("exercise ordering", () => {
     expect(document.querySelector(".exercise-sortable")).toBeInTheDocument();
   });
 
-  it("archive tab exercises are not wrapped in the sortable class", async () => {
+  it("retired tab exercises are not wrapped in the sortable class", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Old Move" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
-    await user.click(screen.getByTestId("tab-archive"));
-    // Archived exercises render via plain ExerciseCard without the sortable wrapper
+    await user.click(screen.getByTestId("tab-retired"));
+    // Retired exercises render via plain ExerciseCard without the sortable wrapper
     expect(document.querySelector(".exercise-sortable")).not.toBeInTheDocument();
   });
 });
@@ -522,12 +522,12 @@ describe("remove group", () => {
     expect(screen.getByTestId("btn-remove-group")).toBeInTheDocument();
   });
 
-  it("does not show the remove button on the Archive tab", async () => {
+  it("does not show the remove button on the Retired tab", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Old Move" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
-    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("tab-retired"));
     expect(screen.queryByTestId("btn-remove-group")).not.toBeInTheDocument();
   });
 });
@@ -1713,12 +1713,12 @@ describe("weight prompt", () => {
 // ─── Add exercise ───────────────────────────────────────────────────────────
 
 describe("add exercise", () => {
-  it("add exercise button not visible on archive tab", async () => {
+  it("add exercise button not visible on retired tab", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
-    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("tab-retired"));
     expect(screen.queryByTestId("btn-add-exercise")).not.toBeInTheDocument();
   });
 
@@ -1819,21 +1819,21 @@ describe("deleteSessionSetById", () => {
   });
 });
 
-// ─── Exercise edit: archive and delete ──────────────────────────────────────
+// ─── Exercise edit: retire and delete ──────────────────────────────────────
 
-describe("exercise edit: archive and delete", () => {
-  it("archive toggle from edit sheet moves exercise to archive", async () => {
+describe("exercise edit: retire and delete", () => {
+  it("retire toggle from edit sheet moves exercise to retired", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
     renderApp();
     await user.click(screen.getByTestId("btn-edit"));
-    await user.click(screen.getByTestId("btn-archive-toggle"));
-    // Exercise should now be in archive tab
-    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("btn-retire-toggle"));
+    // Exercise should now be in retired tab
+    await user.click(screen.getByTestId("tab-retired"));
     expect(screen.getByText("Pull Ups")).toBeInTheDocument();
   });
 
-  it("delete button only shows for archived exercises", async () => {
+  it("delete button only shows for retired exercises", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
     renderApp();
@@ -1841,12 +1841,12 @@ describe("exercise edit: archive and delete", () => {
     expect(screen.queryByTestId("btn-delete")).not.toBeInTheDocument();
   });
 
-  it("deleting an archived exercise removes it from storage", async () => {
+  it("deleting a retired exercise removes it from storage", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Back" }));
     updateExercise(ex.id, { archived: true });
     renderApp();
-    await user.click(screen.getByTestId("tab-archive"));
+    await user.click(screen.getByTestId("tab-retired"));
     await user.click(screen.getByTestId("btn-edit"));
     await user.click(screen.getByTestId("btn-delete"));
     await user.click(screen.getByTestId("btn-delete-confirm"));

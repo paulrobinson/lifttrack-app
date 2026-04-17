@@ -584,7 +584,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           exercise={exercise}
           onSave={handleEditSave}
           onClose={() => setShowEdit(false)}
-          onArchiveToggle={() => {
+          onRetireToggle={() => {
             updateExercise(exercise.id, { archived: !exercise.archived });
             onExerciseChanged();
             setShowEdit(false);

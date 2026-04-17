@@ -145,12 +145,12 @@ export function AddCategoryDialog({ existingCategories, onAdd, onClose }: {
 
 // ─── Exercise Edit / Add Sheet ──────────────────────────────────────────────────
 
-export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onArchiveToggle, onDelete, onTabSwitch }: {
+export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRetireToggle, onDelete, onTabSwitch }: {
   exercise?: Exercise;
   defaultCategory?: string;
   onSave: (data: Partial<Exercise>) => void;
   onClose: () => void;
-  onArchiveToggle?: () => void;
+  onRetireToggle?: () => void;
   onDelete?: () => void;
   onTabSwitch?: (cat: string) => void;
 }) {
@@ -226,15 +226,15 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onAr
           </button>
         </div>
 
-        {!isNew && onArchiveToggle && (
+        {!isNew && onRetireToggle && (
           <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
-              onClick={onArchiveToggle}
+              onClick={onRetireToggle}
               style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "var(--text-xs)", fontWeight: 600, color: exercise?.archived ? "var(--color-success)" : "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}
-              data-testid="btn-archive-toggle"
+              data-testid="btn-retire-toggle"
             >
               <IconArchive />
-              {exercise?.archived ? "Unarchive" : "Archive exercise"}
+              {exercise?.archived ? "Un-retire" : "Retire exercise"}
             </button>
 
             {exercise?.archived && onDelete && (

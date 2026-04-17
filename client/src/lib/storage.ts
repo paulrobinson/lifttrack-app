@@ -95,7 +95,7 @@ function buildSeeds(): Exercise[] {
 
   return [
     // ── Upper ──
-    ex("Bench Press", "Upper", 60, 8, 3, 8),
+    ex("Bench Press", "Upper", 60, 10, 3, 8),
     ex("Pull Ups",    "Upper",  0, 12, 3, 6),
 
     // ── Lower ──

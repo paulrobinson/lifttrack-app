@@ -14,3 +14,5 @@ Always use the following git identity when committing:
 - Always propose new changes with a Pull Request
 - Never push directly to main
 - Add tests for all new features/changes
+- When implementing a GitHub Issue, read the full issue and prioritise what's mentioned in the comments by Paul Robinson.
+- Run the tests before you open the Pull Request. Check back on the pull request to see if it failed. If it failed, fix it.

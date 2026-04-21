@@ -385,6 +385,55 @@ export function undoSet(sessionId: number, exerciseId: number): void {
   save(KEYS.sessionSets, sets.filter((_, i) => i !== realIdx));
 }
 
+// ─── Exercise history ────────────────────────────────────────────────────────
+
+export interface ExerciseSessionHistory {
+  sessionId: number;
+  date: string;
+  weight: number;
+  repsPerSet: number[];
+  totalReps: number;
+  avgReps: number;
+}
+
+/**
+ * Return per-session history for one exercise, sorted oldest-first.
+ * Only includes completed (ended) sessions.
+ */
+export function getExerciseHistory(exerciseId: number): ExerciseSessionHistory[] {
+  const allSets = getAllSessionSets();
+  const allSessions = getSessions();
+
+  const exerciseSets = allSets.filter((s) => s.exerciseId === exerciseId);
+  if (exerciseSets.length === 0) return [];
+
+  const bySession = new Map<number, SessionSet[]>();
+  for (const set of exerciseSets) {
+    if (!bySession.has(set.sessionId)) bySession.set(set.sessionId, []);
+    bySession.get(set.sessionId)!.push(set);
+  }
+
+  const sessionMap = new Map(allSessions.map((s) => [s.id, s]));
+  const result: ExerciseSessionHistory[] = [];
+
+  for (const [sessionId, sets] of bySession) {
+    const session = sessionMap.get(sessionId);
+    if (!session || session.endedAt === null) continue;
+    const repsPerSet = sets.map((s) => s.repsAchieved);
+    const totalReps = repsPerSet.reduce((a, b) => a + b, 0);
+    result.push({
+      sessionId,
+      date: session.startedAt,
+      weight: sets[0].weight,
+      repsPerSet,
+      totalReps,
+      avgReps: totalReps / repsPerSet.length,
+    });
+  }
+
+  return result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
 /**
  * Get the number of days since an exercise was last done.
  * Returns null if the exercise has never been done.

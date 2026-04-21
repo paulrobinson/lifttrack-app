@@ -14,8 +14,10 @@ import {
   deleteSessionSetById,
   getSessionSets,
   getDaysSinceLastDone,
+  getExerciseHistory,
 } from "@/lib/storage";
-import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty } from "./icons";
+import { ExerciseCardBack } from "./ExerciseCardBack";
+import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty, IconChart } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
 import type { SetLog } from "./types";
 
@@ -235,6 +237,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   const [pendingReps, setPendingReps] = useState<number | null>(null);
   const [weightUpdatedInSession, setWeightUpdatedInSession] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   // ── Multi-bar mode state
   const [loggedRepsSets, setLoggedRepsSets] = useState<(number | null)[]>(() => {
@@ -418,7 +421,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     setShowEdit(false);
   };
 
-  const cardState = !isActive ? "idle" : isComplete ? "done" : "active";
+  const cardState = isFlipped ? "" : !isActive ? "idle" : isComplete ? "done" : "active";
   const isArchived = exercise.archived;
 
   const showLowerBtn = isActive && showWeightPrompt === null && (
@@ -436,6 +439,17 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         className={`exercise-card ${cardState} ${isArchived ? "archived-card" : ""}`}
         data-testid={`exercise-card-${exercise.id}`}
       >
+        {isFlipped ? (
+          <div key="back" className="card-face-in">
+            <ExerciseCardBack
+              exercise={exercise}
+              history={getExerciseHistory(exercise.id)}
+              settings={settings}
+              onFlip={() => setIsFlipped(false)}
+            />
+          </div>
+        ) : (
+          <div key="front" className="card-face-in">
         {/* Row 1: name + sets label inline + edit */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
           <h2 style={{ fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.2, minWidth: 0 }} data-testid="exercise-name">
@@ -459,6 +473,14 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
               {daysSinceLastDone}d
             </span>
           )}
+          <button
+            onClick={() => setIsFlipped(true)}
+            className="btn-edit"
+            data-testid="btn-flip"
+            aria-label="View exercise progress"
+          >
+            <IconChart />
+          </button>
           <button className="btn-edit" onClick={() => setShowEdit(true)} data-testid="btn-edit" aria-label="Edit exercise">
             <IconEdit />
           </button>
@@ -571,6 +593,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
             Max reps hit{weightUpdatedInSession ? " — weight updated for next session" : ""}
           </p>
+        )}
+          </div>
         )}
       </div>
 

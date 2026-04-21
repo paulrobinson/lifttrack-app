@@ -291,8 +291,8 @@
     color: hsl(220 10% 50%);
     background: transparent;
     border: none;
-    padding: 3px 6px;
-    border-radius: 6px;
+    padding: 6px 8px;
+    border-radius: 8px;
     transition: color var(--transition-interactive);
   }
   .btn-edit:hover { color: var(--color-text-muted); }
@@ -304,7 +304,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px 3px;
+    padding: 6px 5px;
     flex-shrink: 0;
     color: hsl(220 10% 50%);
     transition: color 150ms ease;
@@ -542,6 +542,15 @@
   @keyframes pop-in {
     from { transform: scale(0.5); opacity: 0; }
     to   { transform: scale(1);   opacity: 1; }
+  }
+
+  /* ---- Card face flip animation ---- */
+  @keyframes card-face-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .card-face-in {
+    animation: card-face-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   /* ---- Undo hint ---- */

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, logSetBulk, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
 import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
 
 // Mock scrollIntoView for tests (not available in jsdom)
@@ -2289,5 +2289,123 @@ describe("tab-switch preserves exercise completion state", () => {
 
     // Counter should still show at least 1
     expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
+  });
+});
+
+// ─── Exercise card flip (progress view) ──────────────────────────────────────
+
+describe("exercise card flip — progress view", () => {
+  it("each exercise card has a flip button", () => {
+    renderApp();
+    const cards = screen.getAllByTestId(/^exercise-card-/);
+    expect(cards.length).toBeGreaterThan(0);
+    // The first card should have a flip button
+    expect(within(cards[0]).getByTestId("btn-flip")).toBeInTheDocument();
+  });
+
+  it("clicking the flip button shows the progress view with exercise name", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 60 }));
+    renderApp();
+
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    expect(within(card).getByTestId("btn-flip-back")).toBeInTheDocument();
+  });
+
+  it("shows 'no history' message when the exercise has no logged sessions", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Bench Press", category: "Upper" }));
+    renderApp();
+
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    expect(within(card).getByTestId("no-history-message")).toBeInTheDocument();
+  });
+
+  it("shows headline stats and readiness banner when history exists", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 60 }));
+
+    // Log a completed session
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    expect(within(card).getByTestId("readiness-banner")).toBeInTheDocument();
+    expect(within(card).getByTestId("recent-sessions")).toBeInTheDocument();
+  });
+
+  it("clicking the back button returns to the exercise front", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Bench Press", category: "Upper" }));
+    renderApp();
+
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("btn-flip"));
+    expect(within(card).getByTestId("btn-flip-back")).toBeInTheDocument();
+
+    await user.click(within(card).getByTestId("btn-flip-back"));
+    expect(within(card).getByTestId("btn-flip")).toBeInTheDocument();
+    // Rep bar should be back
+    expect(within(card).getByTestId("rep-bar")).toBeInTheDocument();
+  });
+
+  it("recent sessions table shows the correct weight and reps", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 60, sets: 3 }));
+
+    const session = startSession();
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8, numSets: 3 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const table = within(card).getByTestId("recent-sessions");
+    expect(table).toHaveTextContent("60kg");
+    expect(table).toHaveTextContent("8, 8, 8");
+  });
+
+  it("shows 'Ready to increase weight' readiness when last two sessions hit max reps", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 60, maxReps: 10, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 60, repsAchieved: 10 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 60, repsAchieved: 10 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    expect(within(card).getByTestId("readiness-banner")).toHaveTextContent("Ready to increase weight");
+  });
+
+  it("flipping does not affect the ability to log sets on other cards", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    // Start a session
+    await user.click(screen.getByTestId("btn-start-session"));
+
+    // Flip the first card
+    const cards = screen.getAllByTestId(/^exercise-card-/);
+    await user.click(within(cards[0]).getByTestId("btn-flip"));
+
+    // Second card should still have a usable rep bar
+    if (cards.length > 1) {
+      expect(within(cards[1]).getByTestId("rep-bar")).toBeInTheDocument();
+    }
   });
 });

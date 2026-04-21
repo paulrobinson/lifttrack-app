@@ -25,6 +25,7 @@ import {
   deleteCategory,
   syncCategoriesFromExercises,
   getDaysSinceLastDone,
+  getExerciseHistory,
   DEFAULT_CATEGORIES,
   type Exercise,
 } from "./storage";
@@ -830,5 +831,101 @@ describe("isFavourite field", () => {
     const all = getExercises();
     expect(all).toHaveLength(1);
     expect(all[0].isFavourite).toBeFalsy();
+  });
+});
+
+// ─── getExerciseHistory ───────────────────────────────────────────────────────
+
+describe("getExerciseHistory", () => {
+  it("returns an empty array when no sessions have been logged for the exercise", () => {
+    const ex = createExercise(makeExercise());
+    expect(getExerciseHistory(ex.id)).toEqual([]);
+  });
+
+  it("returns an empty array when the only session is still active (not ended)", () => {
+    const ex = createExercise(makeExercise());
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    // do NOT call endSession — session is still active
+    expect(getExerciseHistory(ex.id)).toHaveLength(0);
+  });
+
+  it("returns one entry per ended session that included the exercise", () => {
+    const ex = createExercise(makeExercise());
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 9 });
+    endSession(s2.id);
+    const history = getExerciseHistory(ex.id);
+    expect(history).toHaveLength(2);
+  });
+
+  it("does not include sessions where a different exercise was logged", () => {
+    const ex1 = createExercise(makeExercise({ name: "Squat" }));
+    const ex2 = createExercise(makeExercise({ name: "Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex2.id, weight: 40, repsAchieved: 10 });
+    endSession(session.id);
+    expect(getExerciseHistory(ex1.id)).toHaveLength(0);
+  });
+
+  it("sorts entries in chronological order (oldest first)", () => {
+    const ex = createExercise(makeExercise());
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 22.5, repsAchieved: 7 });
+    endSession(s2.id);
+
+    // Backdate s2 to be older than s1 so we can verify ordering is by date, not insertion order
+    const sessions = getSessions();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    sessions.find((s) => s.id === s2.id)!.startedAt = yesterday.toISOString();
+    localStorage.setItem("lt_sessions", JSON.stringify(sessions));
+
+    const history = getExerciseHistory(ex.id);
+    expect(history[0].sessionId).toBe(s2.id); // older session first
+    expect(history[1].sessionId).toBe(s1.id);
+  });
+
+  it("captures the weight used in the session", () => {
+    const ex = createExercise(makeExercise({ weight: 20 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 25, repsAchieved: 8 });
+    endSession(session.id);
+    const history = getExerciseHistory(ex.id);
+    expect(history[0].weight).toBe(25);
+  });
+
+  it("captures repsPerSet as an array of reps achieved per logged set", () => {
+    const ex = createExercise(makeExercise({ sets: 3 }));
+    const session = startSession();
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    endSession(session.id);
+    const history = getExerciseHistory(ex.id);
+    expect(history[0].repsPerSet).toHaveLength(3);
+    expect(history[0].repsPerSet.every((r) => r === 9)).toBe(true);
+  });
+
+  it("computes totalReps as the sum of repsPerSet", () => {
+    const ex = createExercise(makeExercise({ sets: 3 }));
+    const session = startSession();
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    endSession(session.id);
+    const history = getExerciseHistory(ex.id);
+    expect(history[0].totalReps).toBe(27);
+  });
+
+  it("computes avgReps as totalReps divided by the number of sets", () => {
+    const ex = createExercise(makeExercise({ sets: 3 }));
+    const session = startSession();
+    logSetBulk({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 9, numSets: 3 });
+    endSession(session.id);
+    const history = getExerciseHistory(ex.id);
+    expect(history[0].avgReps).toBe(9);
   });
 });

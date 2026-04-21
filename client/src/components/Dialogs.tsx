@@ -201,16 +201,19 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
   const [name, setName] = useState(exercise?.name ?? "");
   const [weight, setWeight] = useState(exercise ? String(exercise.weight) : "");
   const [maxReps, setMaxReps] = useState(exercise ? String(exercise.maxReps) : "12");
+  const [minReps, setMinReps] = useState(exercise?.minReps != null ? String(exercise.minReps) : "");
   const [sets, setSets] = useState(exercise ? String(exercise.sets) : "3");
   const [category, setCategory] = useState<string>(exercise?.category ?? defaultCategory ?? sheetCategories[0] ?? "Back");
   const [tempo, setTempo] = useState(exercise?.tempo ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
+    const parsedMinReps = parseInt(minReps);
     const data: Partial<Exercise> = {
       name: name.trim() || exercise?.name || "New Exercise",
       weight: parseFloat(weight) || exercise?.weight || 0,
       maxReps: parseInt(maxReps) || exercise?.maxReps || 12,
+      minReps: !isNaN(parsedMinReps) && parsedMinReps > 0 ? parsedMinReps : undefined,
       sets: parseInt(sets) || exercise?.sets || 3,
       category,
       tempo: tempo.trim() || undefined,
@@ -233,7 +236,7 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bench Press" data-testid="edit-name" />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <div className="edit-field">
             <label>Weight ({weightUnit})</label>
             <input type="number" inputMode="decimal" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g. 30" data-testid="edit-weight" />
@@ -243,10 +246,14 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
             <input type="number" inputMode="numeric" value={maxReps} onChange={(e) => setMaxReps(e.target.value)} data-testid="edit-max-reps" />
           </div>
           <div className="edit-field">
+            <label>Min Reps</label>
+            <input type="number" inputMode="numeric" value={minReps} onChange={(e) => setMinReps(e.target.value)} placeholder="—" data-testid="edit-min-reps" />
+          </div>
+          <div className="edit-field">
             <label>Sets</label>
             <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(e.target.value)} data-testid="edit-sets" />
           </div>
-          <div className="edit-field">
+          <div className="edit-field" style={{ gridColumn: "span 2" }}>
             <label>Group</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} data-testid="edit-category">
               {sheetCategories.map((c) => <option key={c} value={c}>{c}</option>)}

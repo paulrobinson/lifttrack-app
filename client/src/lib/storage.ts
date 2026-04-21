@@ -7,6 +7,7 @@ export interface Exercise {
   category: string;
   weight: number;
   maxReps: number;
+  minReps?: number;
   sets: number;
   lastReps: number | null;
   lastRepsSets?: number[] | null; // per-set rep data (e.g. from "Reps: 10, 10, 10, 9" import)

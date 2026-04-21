@@ -37,8 +37,9 @@ export function computeSetOutcome(
 
 // ─── Rep Bar Row ────────────────────────────────────────────────────────────────
 
-function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testIdSuffix }: {
+function RepBarRow({ maxReps, minReps, referenceReps, isActive, loggedReps, onTap, testIdSuffix }: {
   maxReps: number;
+  minReps?: number;
   referenceReps: number | null;
   isActive: boolean;
   loggedReps: number | null;
@@ -53,6 +54,8 @@ function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testId
     return rep <= (referenceReps ?? 0) ? "reference" : "empty";
   };
 
+  const isBelowMin = (rep: number) => minReps != null && minReps > 1 && rep < minReps;
+
   const showLabel = (rep: number) => {
     if (rep === maxReps) return true;
     if (loggedReps !== null && rep === loggedReps && rep !== maxReps) return true;
@@ -66,10 +69,11 @@ function RepBarRow({ maxReps, referenceReps, isActive, loggedReps, onTap, testId
     <div className="rep-bar" data-testid={`rep-bar${suffix}`}>
       {squares.map((rep) => {
         const state = getState(rep);
+        const belowMin = isBelowMin(rep);
         return (
           <button
             key={rep}
-            className={`rep-square ${state} ${tappable ? "tappable" : ""}`}
+            className={`rep-square ${state}${belowMin ? " below-min" : ""} ${tappable ? "tappable" : ""}`}
             onClick={tappable ? () => onTap(rep) : undefined}
             aria-label={`${rep} rep${rep !== 1 ? "s" : ""}`}
             data-testid={`rep-square${suffix}-${rep}`}
@@ -109,6 +113,7 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
     return (
       <RepBarRow
         maxReps={exercise.maxReps}
+        minReps={exercise.minReps}
         referenceReps={referenceReps}
         isActive={isActive}
         loggedReps={loggedReps}
@@ -133,6 +138,7 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
                 data-testid={`rep-bar-undo-set-${i}`}>
                 <RepBarRow
                   maxReps={exercise.maxReps}
+                  minReps={exercise.minReps}
                   referenceReps={ref}
                   isActive={false}
                   loggedReps={setLogged}
@@ -147,6 +153,7 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
             <RepBarRow
               key={i}
               maxReps={exercise.maxReps}
+              minReps={exercise.minReps}
               referenceReps={ref}
               isActive={isActive && setLogged === null}
               loggedReps={setLogged}

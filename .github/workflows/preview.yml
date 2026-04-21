@@ -9,6 +9,10 @@ permissions:
   pull-requests: write
   actions: write
 
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
   deploy-preview:
     if: github.event.action != 'closed'

@@ -1761,6 +1761,41 @@ describe("session summary", () => {
     await user.click(screen.getByTestId("summary-close"));
     expect(screen.queryByTestId("summary-sheet")).not.toBeInTheDocument();
   });
+
+  it("exercise logged at max reps appears in summary even if session ends before weight prompt is confirmed", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    // Tap max reps — this used to defer onSetLogged until the weight prompt was confirmed
+    await user.click(screen.getByTestId("rep-square-12"));
+    // End session without waiting for or confirming the weight prompt
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(sheet).toBeInTheDocument();
+    expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
+    expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
+  });
+
+  it("exercise logged at max reps appears in summary when weight prompt is cancelled", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-12"));
+    // Wait for weight prompt and then cancel it
+    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    await user.click(screen.getByTestId("weight-prompt-cancel"));
+    // The exercise should still be counted
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
+    // End session — exercise must appear in summary
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
+    expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
+  });
 });
 
 // ─── Session counter ────────────────────────────────────────────────────────
@@ -1813,7 +1848,7 @@ describe("weight prompt", () => {
     await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
   });
 
-  it("cancelling weight prompt clears the pending log", async () => {
+  it("cancelling weight prompt dismisses the prompt and keeps the set logged", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
@@ -1822,9 +1857,8 @@ describe("weight prompt", () => {
     await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
     await user.click(screen.getByTestId("weight-prompt-cancel"));
     expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
-    // Rep bar should still be tappable (not logged)
-    const square = screen.getByTestId("rep-square-8");
-    expect(square.className).toContain("tappable");
+    // The set is already committed — session counter must still show 1
+    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
   });
 
   it("confirming weight prompt logs the set and updates weight", async () => {

@@ -142,10 +142,10 @@
 
   .rep-square.filled .rep-label { color: hsl(142 40% 20%); }
 
-  /* Below-min reps: lighter shade on the (minReps-1) leftmost squares */
-  .rep-square.below-min.empty { background: hsl(220 10% 27%); }
-  .rep-square.below-min.reference { background: hsl(220 8% 41%); }
-  .rep-square.below-min.filled { background: hsl(142 45% 46%); }
+  /* Below-min reps: noticeably different shade on the (minReps-1) leftmost squares */
+  .rep-square.below-min.empty { background: hsl(220 15% 32%); }
+  .rep-square.below-min.reference { background: hsl(220 12% 50%); }
+  .rep-square.below-min.filled { background: hsl(142 35% 55%); }
 
   /* ---- Sortable card wrapper ---- */
   /* Prevent iOS text selection, magnifier, and copy callout on long press */

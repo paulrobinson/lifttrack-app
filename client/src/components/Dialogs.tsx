@@ -242,12 +242,12 @@ export function ExerciseSheet({ exercise, defaultCategory, onSave, onClose, onRe
             <input type="number" inputMode="decimal" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g. 30" data-testid="edit-weight" />
           </div>
           <div className="edit-field">
-            <label>Max Reps</label>
-            <input type="number" inputMode="numeric" value={maxReps} onChange={(e) => setMaxReps(e.target.value)} data-testid="edit-max-reps" />
-          </div>
-          <div className="edit-field">
             <label>Min Reps</label>
             <input type="number" inputMode="numeric" value={minReps} onChange={(e) => setMinReps(e.target.value)} placeholder="—" data-testid="edit-min-reps" />
+          </div>
+          <div className="edit-field">
+            <label>Max Reps</label>
+            <input type="number" inputMode="numeric" value={maxReps} onChange={(e) => setMaxReps(e.target.value)} data-testid="edit-max-reps" />
           </div>
           <div className="edit-field">
             <label>Sets</label>

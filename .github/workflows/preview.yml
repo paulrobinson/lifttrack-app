@@ -44,7 +44,7 @@ jobs:
             git commit --allow-empty -m "Init previews branch"
           fi
           mkdir -p previews/pr-${{ github.event.number }}
-          rsync -av --delete /tmp/pr-preview/ previews/pr-${{ github.event.number }}/
+          rsync -av --delete --checksum /tmp/pr-preview/ previews/pr-${{ github.event.number }}/
           git add previews/
           git commit -m "Preview for PR #${{ github.event.number }}" || echo "No changes"
           git push origin previews

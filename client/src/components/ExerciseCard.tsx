@@ -233,6 +233,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   });
   const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
   const [pendingReps, setPendingReps] = useState<number | null>(null);
+  const [weightUpdatedInSession, setWeightUpdatedInSession] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
   // ── Multi-bar mode state
@@ -328,12 +329,10 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       onSetUndone(exercise.id);
       return;
     }
+    commitLog(reps, exercise.weight);
     if (reps === exercise.maxReps) {
-      setLoggedReps(reps);
       setPendingReps(reps);
       setTimeout(() => setShowWeightPrompt("increase"), 350);
-    } else {
-      commitLog(reps, exercise.weight);
     }
   };
 
@@ -366,7 +365,9 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   const handleRepTapSet = (setIndex: number, reps: number) => {
     if (!isActive || !sessionId) return;
     if (reps === exercise.maxReps) {
-      setLoggedRepsSets((prev) => { const n = [...prev]; n[setIndex] = reps; return n; });
+      const newSets = loggedRepsSets.map((r, i) => (i === setIndex ? reps : r));
+      setLoggedRepsSets(newSets);
+      commitSetLog(setIndex, reps, exercise.weight, newSets);
       setPendingReps(reps);
       setPendingSetIdx(setIndex);
       setTimeout(() => setShowWeightPrompt("increase"), 350);
@@ -393,27 +394,18 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   const handleWeightConfirm = (newWeight: number) => {
     const weightMeta = { previousWeight: exercise.weight, weightChangedInSession: sessionId };
     if (!isSingleMode && pendingSetIdx !== null) {
-      if (showWeightPrompt === "increase") {
-        const newSets = loggedRepsSets.map((r, i) => (i === pendingSetIdx ? pendingReps! : r));
-        commitSetLog(pendingSetIdx, pendingReps!, exercise.weight, newSets);
-        updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
-      } else {
-        updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
-      }
+      updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
       onExerciseChanged();
       setPendingReps(null);
       setPendingSetIdx(null);
       setShowWeightPrompt(null);
+      setWeightUpdatedInSession(true);
     } else {
-      if (showWeightPrompt === "increase") {
-        commitLog(pendingReps!, exercise.weight);
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
-      } else {
-        updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
-      }
+      updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
       onExerciseChanged();
       setPendingReps(null);
       setShowWeightPrompt(null);
+      setWeightUpdatedInSession(true);
     }
   };
 
@@ -567,10 +559,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             onConfirm={handleWeightConfirm}
             onCancel={() => {
               if (!isSingleMode && pendingSetIdx !== null) {
-                setLoggedRepsSets((prev) => { const n = [...prev]; n[pendingSetIdx] = null; return n; });
                 setPendingSetIdx(null);
-              } else {
-                setLoggedReps(null);
               }
               setPendingReps(null);
               setShowWeightPrompt(null);
@@ -580,7 +569,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
         {hitMaxReps && (
           <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
-            Max reps hit — weight updated for next session
+            Max reps hit{weightUpdatedInSession ? " — weight updated for next session" : ""}
           </p>
         )}
       </div>

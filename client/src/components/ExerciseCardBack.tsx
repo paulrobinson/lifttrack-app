@@ -173,7 +173,7 @@ export function ExerciseCardBack({
               </p>
               <div style={{ height: 120 }} data-testid="progress-chart">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                  <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 9, fill: "hsl(220 8% 45%)" }}

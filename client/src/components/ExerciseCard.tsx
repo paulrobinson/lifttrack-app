@@ -15,6 +15,7 @@ import {
   getSessionSets,
   getDaysSinceLastDone,
   getExerciseHistory,
+  getExercises,
 } from "@/lib/storage";
 import { ExerciseCardBack } from "./ExerciseCardBack";
 import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty, IconChart } from "./icons";
@@ -367,10 +368,18 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   };
 
   const handleEditSave = (data: Partial<Exercise>) => {
+    const updatedData: Partial<Exercise> = { ...data };
     if (data.category && data.category !== exercise.category) {
       onTabSwitch(data.category);
+      // Append to the end of the new category so the exercise doesn't land at
+      // a sortOrder that collides with exercises already there.
+      const allExercises = getExercises();
+      const newCatMax = allExercises
+        .filter((ex) => ex.category === data.category && !ex.archived)
+        .reduce((max, ex) => Math.max(max, ex.sortOrder), -1);
+      updatedData.sortOrder = newCatMax + 1;
     }
-    updateExercise(exercise.id, data);
+    updateExercise(exercise.id, updatedData);
     onExerciseChanged();
     setShowEdit(false);
   };

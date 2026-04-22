@@ -169,6 +169,22 @@ export function replaceExercises(exercises: Omit<Exercise, "id">[]): void {
   syncCategoriesFromExercises(exercises);
 }
 
+export function mergeExercises(incoming: Omit<Exercise, "id">[]): void {
+  const existing = getExercises();
+  const maxSortOrder = existing.reduce((max, ex) => Math.max(max, ex.sortOrder), -1);
+  const toAdd = incoming.filter(
+    (ex) => !existing.some(
+      (e) => e.name.toLowerCase() === ex.name.toLowerCase() &&
+             e.category.toLowerCase() === ex.category.toLowerCase()
+    )
+  );
+  if (toAdd.length === 0) return;
+  const withOrders = toAdd.map((ex, i) => ({ ...ex, sortOrder: maxSortOrder + 1 + i }));
+  const withIds = withOrders.map((ex) => ({ ...ex, id: nextId() }));
+  save(KEYS.exercises, [...existing, ...withIds]);
+  syncCategoriesFromExercises(toAdd);
+}
+
 // ─── Exercises ───────────────────────────────────────────────────────────────
 
 export function getExercises(): Exercise[] {

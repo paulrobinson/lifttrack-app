@@ -51,10 +51,13 @@ function RepBarRow({ maxReps, minReps, referenceReps, isActive, loggedReps, onTa
 
   const getState = (rep: number) => {
     if (loggedReps !== null) return rep <= loggedReps ? "filled" : "empty";
-    return rep <= (referenceReps ?? 0) ? "reference" : "empty";
+    return "empty";
   };
 
   const isBelowMin = (rep: number) => minReps != null && minReps > 1 && rep < minReps;
+
+  const isRefMarker = (rep: number) =>
+    loggedReps === null && referenceReps !== null && referenceReps > 0 && rep === referenceReps;
 
   const showLabel = (rep: number) => {
     if (rep === maxReps) return true;
@@ -80,6 +83,7 @@ function RepBarRow({ maxReps, minReps, referenceReps, isActive, loggedReps, onTa
             tabIndex={tappable ? 0 : -1}
             style={{ cursor: tappable ? "pointer" : "default" }}
           >
+            {isRefMarker(rep) && <span className="rep-ref-marker" />}
             {showLabel(rep) && <span className="rep-label">{rep}</span>}
           </button>
         );

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { type Exercise, replaceExercises } from "@/lib/storage";
+import { type Exercise, replaceExercises, mergeExercises, getExercises } from "@/lib/storage";
 import { Modal, cancelBtnStyle } from "./Modal";
-import type { ParsedExercise, ParseError, ParseResult, ImportStep } from "./types";
+import type { ParsedExercise, ParseError, ParseResult, ImportStep, ImportMode } from "./types";
 
 // ─── Import Parser ──────────────────────────────────────────────────────────────
 
@@ -162,14 +162,32 @@ export async function decodeState(encoded: string): Promise<Exercise[]> {
 
 export function ImportButton({ onImport }: { onImport: () => void }) {
   const [step, setStep] = useState<ImportStep>("idle");
+  const [importMode, setImportMode] = useState<ImportMode>("merge");
   const [parseError, setParseError] = useState<ParseError | null>(null);
   const [parsed, setParsed] = useState<ParsedExercise[] | null>(null);
+  const [mergePreview, setMergePreview] = useState<{ toAdd: ParsedExercise[]; toSkip: ParsedExercise[] } | null>(null);
   const [pasteValue, setPasteValue] = useState("");
   const [decodeError, setDecodeError] = useState<string | null>(null);
 
-  const reset = () => { setStep("idle"); setParseError(null); setParsed(null); setPasteValue(""); setDecodeError(null); };
+  const reset = () => { setStep("idle"); setParseError(null); setParsed(null); setMergePreview(null); setPasteValue(""); setDecodeError(null); };
 
   const handleParsed = (exercises: ParsedExercise[]) => {
+    if (importMode === "merge") {
+      const existing = getExercises();
+      const toAdd = exercises.filter(
+        (ex) => !existing.some(
+          (e) => e.name.toLowerCase() === ex.name.toLowerCase() &&
+                 e.category.toLowerCase() === ex.category.toLowerCase()
+        )
+      );
+      const toSkip = exercises.filter(
+        (ex) => existing.some(
+          (e) => e.name.toLowerCase() === ex.name.toLowerCase() &&
+                 e.category.toLowerCase() === ex.category.toLowerCase()
+        )
+      );
+      setMergePreview({ toAdd, toSkip });
+    }
     setParsed(exercises);
     setStep("confirm");
   };
@@ -243,19 +261,25 @@ export function ImportButton({ onImport }: { onImport: () => void }) {
     );
   };
 
-  if (step === "warn") {
+  if (step === "mode") {
     return (
       <Modal onClose={reset}>
         <p style={{ fontWeight: 700, fontSize: "var(--text-base)", marginBottom: "8px" }}>Import exercises</p>
         <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "20px" }}>
-          Importing will <strong style={{ color: "hsl(0 70% 65%)" }}>replace all your current exercises</strong>. If you want to keep them, use the Export button first to save a copy.
+          How would you like to handle the imported exercises?
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <button
             style={{ width: "100%", padding: "12px", borderRadius: "99px", border: "none", cursor: "pointer", background: "var(--color-success)", color: "#000", fontWeight: 700, fontSize: "var(--text-sm)" }}
-            onClick={() => setStep("choose")}
+            onClick={() => { setImportMode("merge"); setStep("choose"); }}
           >
-            Continue
+            Add to existing
+          </button>
+          <button
+            style={{ width: "100%", padding: "12px", borderRadius: "99px", border: "1px solid hsl(0 50% 40%)", cursor: "pointer", background: "transparent", color: "hsl(0 70% 65%)", fontWeight: 700, fontSize: "var(--text-sm)" }}
+            onClick={() => { setImportMode("replace"); setStep("choose"); }}
+          >
+            Replace all
           </button>
           <button onClick={reset} style={cancelBtnStyle}>Cancel</button>
         </div>
@@ -355,27 +379,101 @@ export function ImportButton({ onImport }: { onImport: () => void }) {
   }
 
   if (step === "confirm") {
+    const isMerge = importMode === "merge";
+    const toAdd = isMerge ? (mergePreview?.toAdd ?? []) : parsed!;
+    const toSkip = isMerge ? (mergePreview?.toSkip ?? []) : [];
+
+    const addSummary = Object.entries(
+      toAdd.reduce<Record<string, number>>((acc, ex) => {
+        acc[ex.category] = (acc[ex.category] ?? 0) + 1;
+        return acc;
+      }, {})
+    );
+
+    const skipSummary = Object.entries(
+      toSkip.reduce<Record<string, number>>((acc, ex) => {
+        acc[ex.category] = (acc[ex.category] ?? 0) + 1;
+        return acc;
+      }, {})
+    );
+
     return (
       <Modal onClose={reset}>
         <p style={{ fontWeight: 700, fontSize: "var(--text-base)", marginBottom: "8px" }}>Confirm import</p>
-        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "14px" }}>
-          Found <strong style={{ color: "var(--color-text)" }}>{parsed!.length} exercise{parsed!.length !== 1 ? "s" : ""}</strong> across {groupSummary.length} group{groupSummary.length !== 1 ? "s" : ""}:
-        </p>
-        <div style={{ marginBottom: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
-          {groupSummary.map(([cat, count]) => (
-            <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", background: "var(--color-surface-2, hsl(220 12% 18%))", borderRadius: "8px", padding: "7px 12px" }}>
-              <span style={{ fontWeight: 600 }}>{cat}</span>
-              <span style={{ color: "var(--color-text-muted)" }}>{count} exercise{count !== 1 ? "s" : ""}</span>
+
+        {isMerge ? (
+          <>
+            {toAdd.length > 0 ? (
+              <>
+                <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "8px" }}>
+                  <strong style={{ color: "var(--color-text)" }}>{toAdd.length} exercise{toAdd.length !== 1 ? "s" : ""}</strong> will be added:
+                </p>
+                <div style={{ marginBottom: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {addSummary.map(([cat, count]) => (
+                    <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", background: "var(--color-surface-2, hsl(220 12% 18%))", borderRadius: "8px", padding: "7px 12px" }}>
+                      <span style={{ fontWeight: 600 }}>{cat}</span>
+                      <span style={{ color: "var(--color-success)" }}>+{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "12px" }}>
+                No new exercises to add — all {parsed!.length} already exist.
+              </p>
+            )}
+            {toSkip.length > 0 && (
+              <>
+                <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "8px" }}>
+                  <strong style={{ color: "var(--color-text)" }}>{toSkip.length} exercise{toSkip.length !== 1 ? "s" : ""}</strong> already exist and will be skipped:
+                </p>
+                <div style={{ marginBottom: "16px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {skipSummary.map(([cat, count]) => (
+                    <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", background: "var(--color-surface-2, hsl(220 12% 18%))", borderRadius: "8px", padding: "7px 12px" }}>
+                      <span style={{ fontWeight: 600 }}>{cat}</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>{count} skipped</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "14px" }}>
+              Found <strong style={{ color: "var(--color-text)" }}>{parsed!.length} exercise{parsed!.length !== 1 ? "s" : ""}</strong> across {groupSummary.length} group{groupSummary.length !== 1 ? "s" : ""}:
+            </p>
+            <div style={{ marginBottom: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              {groupSummary.map(([cat, count]) => (
+                <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", background: "var(--color-surface-2, hsl(220 12% 18%))", borderRadius: "8px", padding: "7px 12px" }}>
+                  <span style={{ fontWeight: 600 }}>{cat}</span>
+                  <span style={{ color: "var(--color-text-muted)" }}>{count} exercise{count !== 1 ? "s" : ""}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <p style={{ fontSize: "11px", color: "hsl(0 70% 65%)", marginBottom: "16px" }}>This will replace your current exercises. This cannot be undone.</p>
+            <p style={{ fontSize: "11px", color: "hsl(0 70% 65%)", marginBottom: "16px" }}>This will replace your current exercises. This cannot be undone.</p>
+          </>
+        )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <button
-            style={{ width: "100%", padding: "12px", borderRadius: "99px", border: "none", cursor: "pointer", background: "var(--color-success)", color: "#000", fontWeight: 700, fontSize: "var(--text-sm)" }}
-            onClick={() => { replaceExercises(parsed!); onImport(); reset(); }}
+            disabled={isMerge && toAdd.length === 0}
+            style={{ width: "100%", padding: "12px", borderRadius: "99px", border: "none", cursor: isMerge && toAdd.length === 0 ? "not-allowed" : "pointer", background: isMerge && toAdd.length === 0 ? "hsl(220 12% 18%)" : "var(--color-success)", color: isMerge && toAdd.length === 0 ? "var(--color-text-muted)" : "#000", fontWeight: 700, fontSize: "var(--text-sm)", opacity: isMerge && toAdd.length === 0 ? 0.5 : 1 }}
+            onClick={() => {
+              if (isMerge) {
+                mergeExercises(parsed!);
+              } else {
+                replaceExercises(parsed!);
+              }
+              onImport();
+              reset();
+            }}
           >
-            Import {parsed!.length} exercises
+            {isMerge
+              ? toAdd.length === 0
+                ? "Nothing to add"
+                : `Add ${toAdd.length} exercise${toAdd.length !== 1 ? "s" : ""}`
+              : `Import ${parsed!.length} exercise${parsed!.length !== 1 ? "s" : ""}`}
           </button>
           <button onClick={reset} style={cancelBtnStyle}>Cancel</button>
         </div>
@@ -385,7 +483,7 @@ export function ImportButton({ onImport }: { onImport: () => void }) {
 
   return (
     <button
-      onClick={() => setStep("warn")}
+      onClick={() => setStep("mode")}
       className="bar-btn"
       data-testid="btn-import"
     >

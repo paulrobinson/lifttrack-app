@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   initStorage,
   replaceExercises,
+  mergeExercises,
   getExercises,
   createExercise,
   updateExercise,
@@ -927,5 +928,77 @@ describe("getExerciseHistory", () => {
     endSession(session.id);
     const history = getExerciseHistory(ex.id);
     expect(history[0].avgReps).toBe(9);
+  });
+});
+
+// ─── mergeExercises ───────────────────────────────────────────────────────────
+
+describe("mergeExercises", () => {
+  it("appends new exercises to the existing list", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "Squat", category: "Lower", sortOrder: 0 })]);
+    const all = getExercises();
+    expect(all).toHaveLength(2);
+    expect(all.some((e) => e.name === "Pull Ups")).toBe(true);
+    expect(all.some((e) => e.name === "Squat")).toBe(true);
+  });
+
+  it("skips exercises that already exist (same name + category, case-insensitive)", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "pull ups", category: "upper", sortOrder: 0 })]);
+    expect(getExercises()).toHaveLength(1);
+  });
+
+  it("adds exercises with a different name even in the same category", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "Bench Press", category: "Upper", sortOrder: 0 })]);
+    expect(getExercises()).toHaveLength(2);
+  });
+
+  it("adds exercises with the same name but a different category", () => {
+    createExercise(makeExercise({ name: "Curl", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "Curl", category: "Lower", sortOrder: 0 })]);
+    expect(getExercises()).toHaveLength(2);
+  });
+
+  it("assigns sortOrder values higher than all existing exercises", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 5 }));
+    mergeExercises([
+      makeExercise({ name: "Squat", category: "Lower", sortOrder: 0 }),
+      makeExercise({ name: "Lunge", category: "Lower", sortOrder: 1 }),
+    ]);
+    const added = getExercises().filter((e) => e.name !== "Pull Ups");
+    expect(added.every((e) => e.sortOrder > 5)).toBe(true);
+  });
+
+  it("syncs new categories from the merged exercises", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "Squat", category: "Aquatics", sortOrder: 0 })]);
+    expect(getCategories()).toContain("Aquatics");
+  });
+
+  it("does not duplicate categories that already exist", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([makeExercise({ name: "Bench Press", category: "Upper", sortOrder: 0 })]);
+    const cats = getCategories().filter((c) => c === "Upper");
+    expect(cats).toHaveLength(1);
+  });
+
+  it("works correctly when existing list is empty", () => {
+    mergeExercises([makeExercise({ name: "Squat", category: "Lower", sortOrder: 0 })]);
+    expect(getExercises()).toHaveLength(1);
+    expect(getExercises()[0].name).toBe("Squat");
+  });
+
+  it("handles a mix of new and duplicate exercises, only adding new ones", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    mergeExercises([
+      makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }),
+      makeExercise({ name: "Bench Press", category: "Upper", sortOrder: 1 }),
+    ]);
+    const all = getExercises();
+    expect(all).toHaveLength(2);
+    expect(all.filter((e) => e.name === "Pull Ups")).toHaveLength(1);
+    expect(all.filter((e) => e.name === "Bench Press")).toHaveLength(1);
   });
 });

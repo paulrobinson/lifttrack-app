@@ -22,4 +22,5 @@ export type ParseResult =
   | { ok: true; exercises: ParsedExercise[] }
   | { ok: false; error: ParseError };
 
-export type ImportStep = "idle" | "warn" | "choose" | "paste" | "error" | "confirm";
+export type ImportStep = "idle" | "mode" | "choose" | "paste" | "error" | "confirm";
+export type ImportMode = "merge" | "replace";

@@ -142,6 +142,24 @@
 
   .rep-square.filled .rep-label { color: hsl(142 40% 20%); }
 
+  /* Below-min reps: noticeably different shade on the (minReps-1) leftmost squares */
+  .rep-square.below-min.empty { background: hsl(220 15% 32%); }
+  .rep-square.below-min.reference { background: hsl(220 12% 50%); }
+  .rep-square.below-min.filled { background: hsl(142 35% 55%); }
+
+  /* Reference point marker: small dot indicating last session's rep count */
+  .rep-ref-marker {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: hsl(220 60% 65%);
+    pointer-events: none;
+  }
+
   /* ---- Sortable card wrapper ---- */
   /* Prevent iOS text selection, magnifier, and copy callout on long press */
   .exercise-sortable {

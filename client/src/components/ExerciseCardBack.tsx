@@ -165,6 +165,24 @@ export function ExerciseCardBack({
             {readiness.label}
           </div>
 
+          {/* Below-min reps warning */}
+          {exercise.minReps != null && recentSessions.length > 0 && recentSessions[0].avgReps < exercise.minReps && (
+            <div
+              data-testid="below-min-reps-warning"
+              style={{
+                borderRadius: "10px",
+                padding: "8px 12px",
+                background: "hsl(25 60% 18%)",
+                border: "1px solid hsl(25 50% 30%)",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "var(--color-warning)",
+              }}
+            >
+              Last session was below your minimum reps — consider reducing the weight.
+            </div>
+          )}
+
           {/* Progress chart — weight (step) + avg reps (dashed) */}
           {chartData.length >= 2 && (
             <div>

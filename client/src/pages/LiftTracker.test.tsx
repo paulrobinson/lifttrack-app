@@ -1369,11 +1369,11 @@ describe("single-bar mode: per-set storage", () => {
     renderApp();
     await user.click(screen.getByTestId("tab-upper"));
 
-    // In single mode, rep-square-8 should be "reference" state, rep-square-9 should be "empty"
+    // In single mode, rep-square-8 should have the ref marker; rep-square-9 should not
     const repBars = screen.getAllByTestId("rep-bar");
     const bar = repBars[0];
-    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
-    expect(within(bar).getByTestId("rep-square-9").className).not.toContain("reference");
+    expect(within(bar).getByTestId("rep-square-8").querySelector(".rep-ref-marker")).toBeTruthy();
+    expect(within(bar).getByTestId("rep-square-9").querySelector(".rep-ref-marker")).toBeNull();
   });
 });
 
@@ -1432,9 +1432,9 @@ describe("mode switch mid-exercise", () => {
     await user.click(screen.getByTestId("toggle-separate-bars"));
     await user.click(screen.getByTestId("settings-close"));
 
-    // Reference bar (square 8) should be visible — NOT empty
+    // Reference square 8 should have the ref marker (not just empty)
     const bar = screen.getAllByTestId("rep-bar")[0];
-    expect(within(bar).getByTestId("rep-square-8").className).toContain("reference");
+    expect(within(bar).getByTestId("rep-square-8").querySelector(".rep-ref-marker")).toBeTruthy();
   });
 
   it("single→separate: a logged exercise stays complete (done-check visible)", async () => {

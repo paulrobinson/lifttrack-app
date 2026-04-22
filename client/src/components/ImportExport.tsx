@@ -20,7 +20,7 @@ export function parseImportText(text: string): ParseResult {
   });
 
   const isDivider = (s: string) => /^—{3,}$/.test(s) || /^-{3,}$/.test(s);
-  const isFieldLine = (s: string) => /^exercise\s*:/i.test(s) || /^max reps\s*:/i.test(s) || /^weight\s*:/i.test(s) || /^sets\s*:/i.test(s) || /^reps\s*:/i.test(s) || /^tempo\s*:/i.test(s);
+  const isFieldLine = (s: string) => /^exercise\s*:/i.test(s) || /^max reps\s*:/i.test(s) || /^min reps\s*:/i.test(s) || /^weight\s*:/i.test(s) || /^sets\s*:/i.test(s) || /^reps\s*:/i.test(s) || /^tempo\s*:/i.test(s);
 
   while (i < lines.length) {
     const line = lines[i];
@@ -60,11 +60,14 @@ export function parseImportText(text: string): ParseResult {
 
     const name = fields["exercise"];
     const maxReps = parseInt(fields["max reps"]);
+    const minRepsRaw = fields["min reps"];
+    const minReps = minRepsRaw ? parseInt(minRepsRaw) : undefined;
     const weight = parseFloat(fields["weight"].replace(/[^\d.]/g, "") || "0");
     const parsedSets = parseInt(fields["sets"]);
     const repValues = fields["reps"].split(/,/).map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
     if (isNaN(maxReps)) return fail(blockStart, `"max reps" value "${fields["max reps"]}" is not a number.`);
+    if (minRepsRaw && isNaN(minReps!)) return fail(blockStart, `"min reps" value "${minRepsRaw}" is not a number.`);
     if (isNaN(weight)) return fail(blockStart, `"weight" value "${fields["weight"]}" is not a number.`);
     if (isNaN(parsedSets))   return fail(blockStart, `"sets" value "${fields["sets"]}" is not a number.`);
     if (repValues.length === 0) return fail(blockStart, `"reps" value "${fields["reps"]}" could not be parsed as a number.`);
@@ -80,6 +83,7 @@ export function parseImportText(text: string): ParseResult {
       category: currentCategory!,
       weight,
       maxReps,
+      ...(minReps != null && !isNaN(minReps) ? { minReps } : {}),
       sets,
       lastReps,
       ...(lastRepsSets ? { lastRepsSets } : {}),
@@ -110,6 +114,7 @@ export function buildExportText(exercises: Exercise[]): string {
     exs.forEach((e, i) => {
       lines.push(`Exercise : ${e.name}`);
       lines.push(`Max reps : ${e.maxReps}`);
+      if (e.minReps != null) lines.push(`Min reps : ${e.minReps}`);
       lines.push(`Weight : ${e.weight}`);
       lines.push(`Sets : ${e.sets}`);
       const repsStr = e.lastRepsSets && e.lastRepsSets.length > 1

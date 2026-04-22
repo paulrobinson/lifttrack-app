@@ -582,3 +582,69 @@ describe("buildExportText with tempo", () => {
     expect(result.exercises[0].tempo).toBe("2-1-2");
   });
 });
+
+// ─── parseImportText – min reps ───────────────────────────────────────────────
+
+describe("parseImportText with min reps", () => {
+  it("parses an optional Min reps field", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nMin reps : 6\nWeight : 0\nSets : 3\nReps : 8\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].minReps).toBe(6);
+  });
+
+  it("leaves minReps undefined when the field is absent", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nWeight : 0\nSets : 3\nReps : 8\n`;
+    const result = parseImportText(text);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].minReps).toBeUndefined();
+  });
+
+  it("returns ok: false when min reps value is not a number", () => {
+    const text = `Back\n—————\nExercise : Pull Ups\nMax reps : 12\nMin reps : lots\nWeight : 0\nSets : 3\nReps : 8\n`;
+    const result = parseImportText(text);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.message).toMatch(/min reps/i);
+  });
+});
+
+// ─── buildExportText – min reps ───────────────────────────────────────────────
+
+describe("buildExportText with min reps", () => {
+  it("includes a Min reps line when minReps is set", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", minReps: 6 }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).toContain("Min reps : 6");
+  });
+
+  it("omits the Min reps line when minReps is not set", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back" }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text).not.toContain("Min reps");
+  });
+
+  it("places Min reps after Max reps in the output", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", maxReps: 12, minReps: 6 }),
+    ];
+    const text = buildExportText(exercises);
+    expect(text.indexOf("Max reps")).toBeLessThan(text.indexOf("Min reps"));
+  });
+
+  it("round-trips minReps through buildExportText → parseImportText", () => {
+    const exercises: Exercise[] = [
+      makeExercise({ id: 1, name: "Pull Ups", category: "Back", weight: 0, maxReps: 12, minReps: 5, sets: 3, lastReps: 8 }),
+    ];
+    const text = buildExportText(exercises);
+    const result = parseImportText(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.exercises[0].minReps).toBe(5);
+  });
+});

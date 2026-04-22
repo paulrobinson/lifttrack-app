@@ -174,27 +174,6 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
   );
 }
 
-// ─── Weight Prompt ──────────────────────────────────────────────────────────────
-
-function WeightPrompt({ label, onConfirm, onCancel, weightUnit = "kg" }: {
-  label: string; onConfirm: (w: number) => void; onCancel: () => void; weightUnit?: "kg" | "lbs";
-}) {
-  const [value, setValue] = useState("");
-  const confirm = () => { const w = parseFloat(value); if (!isNaN(w) && w > 0) onConfirm(w); };
-  return (
-    <div className="inline-prompt" data-testid="weight-prompt">
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>{label}</span>
-      <input autoFocus type="number" inputMode="decimal" step="0.5" min="0" className="prompt-input"
-        placeholder="e.g. 32.5" value={value} onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }}
-        data-testid="weight-prompt-input" />
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>{weightUnit}</span>
-      <button className="btn-confirm" onClick={confirm} data-testid="weight-prompt-confirm">✓</button>
-      <button className="btn-cancel-prompt" onClick={onCancel} data-testid="weight-prompt-cancel">✕</button>
-    </div>
-  );
-}
-
 // ─── Exercise Card ──────────────────────────────────────────────────────────────
 
 export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
@@ -244,9 +223,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
     return prev > 0 && curr > prev;
   });
-  const [showWeightPrompt, setShowWeightPrompt] = useState<"increase" | "decrease" | null>(null);
-  const [pendingReps, setPendingReps] = useState<number | null>(null);
-  const [weightUpdatedInSession, setWeightUpdatedInSession] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
 
@@ -267,7 +243,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     if (!wasLogged) return [];
     return Array.from({ length: Math.min(preloadedSets.length, exercise.sets) }, (_, i) => i);
   });
-  const [pendingSetIdx, setPendingSetIdx] = useState<number | null>(null);
 
   // ── Derived
   const isSingleMode = !settings.showSeparateBars;
@@ -344,10 +319,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       return;
     }
     commitLog(reps, exercise.weight);
-    if (reps === exercise.maxReps) {
-      setPendingReps(reps);
-      setTimeout(() => setShowWeightPrompt("increase"), 350);
-    }
   };
 
   // ── Multi-bar commit & tap
@@ -378,18 +349,9 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
   const handleRepTapSet = (setIndex: number, reps: number) => {
     if (!isActive || !sessionId) return;
-    if (reps === exercise.maxReps) {
-      const newSets = loggedRepsSets.map((r, i) => (i === setIndex ? reps : r));
-      setLoggedRepsSets(newSets);
-      commitSetLog(setIndex, reps, exercise.weight, newSets);
-      setPendingReps(reps);
-      setPendingSetIdx(setIndex);
-      setTimeout(() => setShowWeightPrompt("increase"), 350);
-    } else {
-      const newSets = loggedRepsSets.map((r, i) => (i === setIndex ? reps : r));
-      setLoggedRepsSets(newSets);
-      commitSetLog(setIndex, reps, exercise.weight, newSets);
-    }
+    const newSets = loggedRepsSets.map((r, i) => (i === setIndex ? reps : r));
+    setLoggedRepsSets(newSets);
+    commitSetLog(setIndex, reps, exercise.weight, newSets);
   };
 
   const handleUndoSet = (setIndex: number) => {
@@ -404,25 +366,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     if (wasComplete) { setIsDecline(false); setIsUp(false); updateExercise(exercise.id, { lastTrend: exerciseInitRef.current.lastTrend }); onSetUndone(exercise.id); }
   };
 
-  // ── Weight-prompt confirm
-  const handleWeightConfirm = (newWeight: number) => {
-    const weightMeta = { previousWeight: exercise.weight, weightChangedInSession: sessionId };
-    if (!isSingleMode && pendingSetIdx !== null) {
-      updateExercise(exercise.id, { weight: newWeight, ...weightMeta });
-      onExerciseChanged();
-      setPendingReps(null);
-      setPendingSetIdx(null);
-      setShowWeightPrompt(null);
-      setWeightUpdatedInSession(true);
-    } else {
-      updateExercise(exercise.id, { weight: newWeight, lastReps: null, lastRepsSets: null, ...weightMeta });
-      onExerciseChanged();
-      setPendingReps(null);
-      setShowWeightPrompt(null);
-      setWeightUpdatedInSession(true);
-    }
-  };
-
   const handleEditSave = (data: Partial<Exercise>) => {
     if (data.category && data.category !== exercise.category) {
       onTabSwitch(data.category);
@@ -435,12 +378,15 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   const cardState = isFlipped ? "" : !isActive ? "idle" : isComplete ? "done" : "active";
   const isArchived = exercise.archived;
 
-  const showLowerBtn = isActive && showWeightPrompt === null && (
-    isSingleMode ? loggedReps === null : loggedOrder.length === 0
-  );
   const hitMaxReps = isSingleMode
     ? loggedReps === exercise.maxReps
     : loggedRepsSets.some((r) => r === exercise.maxReps);
+
+  const belowMinReps = exercise.minReps != null && (
+    isSingleMode
+      ? loggedReps !== null && loggedReps < exercise.minReps
+      : loggedRepsSets.some((r) => r !== null && r < exercise.minReps!)
+  );
 
   const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
 
@@ -505,7 +451,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           </button>
         </div>
 
-        {/* Row 2: weight · reps  |  Lower btn  |  Up/Down  |  Tick */}
+        {/* Row 2: weight · reps  |  Up/Down  |  Tick */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)", flex: 1, minWidth: 0 }} data-testid="exercise-weight">
             <span style={{ marginRight: "2px" }} data-testid="icon-dumbbell">🏋️</span>
@@ -522,13 +468,6 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             )}
             {exercise.tempo && <span> · tempo: {exercise.tempo}</span>}
           </p>
-
-          {showLowerBtn && (
-            <button className="btn-weight" onClick={() => setShowWeightPrompt("decrease")} data-testid="btn-decrease-weight">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14" /></svg>
-              Lower
-            </button>
-          )}
 
           {isComplete && isDecline && (
             <span data-testid="badge-down" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
@@ -560,7 +499,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
         {/* Rep bar — single mode */}
         {isSingleMode && (
-          loggedReps !== null && isActive && showWeightPrompt === null ? (
+          loggedReps !== null && isActive ? (
             <div onClick={() => { setLoggedReps(null); setIsDecline(false); setIsUp(false); singleModeSetIdsRef.current.forEach((id) => deleteSessionSetById(id)); singleModeSetIdsRef.current = []; updateExercise(exercise.id, { lastReps: exerciseInitRef.current.lastReps, lastRepsSets: exerciseInitRef.current.lastRepsSets, lastTrend: exerciseInitRef.current.lastTrend }); onExerciseChanged(); onSetUndone(exercise.id); }} style={{ cursor: "pointer" }}>
               <RepBar exercise={exercise} isActive={false} loggedReps={loggedReps} onTap={() => {}} settings={settings} />
               <p className="undo-hint">Tap bar to undo</p>
@@ -584,26 +523,46 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           />
         )}
 
-        {/* Weight prompt */}
-        {showWeightPrompt !== null && (
-          <WeightPrompt
-            label={showWeightPrompt === "increase" ? "New weight:" : "New (lower) weight:"}
-            weightUnit={settings.weightUnit}
-            onConfirm={handleWeightConfirm}
-            onCancel={() => {
-              if (!isSingleMode && pendingSetIdx !== null) {
-                setPendingSetIdx(null);
-              }
-              setPendingReps(null);
-              setShowWeightPrompt(null);
-            }}
-          />
-        )}
-
         {hitMaxReps && (
-          <p style={{ marginTop: "8px", fontSize: "var(--text-xs)", color: "var(--color-success)", fontWeight: 600 }}>
-            Max reps hit{weightUpdatedInSession ? " — weight updated for next session" : ""}
-          </p>
+          <div
+            data-testid="max-reps-suggestion"
+            style={{
+              marginTop: "8px",
+              borderRadius: "10px",
+              padding: "8px 12px",
+              background: "hsl(142 40% 13%)",
+              border: "1px solid hsl(142 35% 22%)",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "hsl(142 60% 45%)",
+            }}
+          >
+            Max reps hit — consider increasing the weight if you feel comfortable.{" "}
+            <button
+              onClick={() => setShowEdit(true)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "hsl(142 60% 45%)", fontWeight: 700, fontSize: "12px", textDecoration: "underline", padding: 0 }}
+              data-testid="max-reps-edit-link"
+            >
+              Edit exercise
+            </button>
+          </div>
+        )}
+        {belowMinReps && (
+          <div
+            data-testid="below-min-reps-suggestion"
+            style={{
+              marginTop: "8px",
+              borderRadius: "10px",
+              padding: "8px 12px",
+              background: "hsl(25 60% 18%)",
+              border: "1px solid hsl(25 50% 30%)",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "var(--color-warning)",
+            }}
+          >
+            Below your minimum reps — consider reducing the weight.
+          </div>
         )}
           </div>
         )}

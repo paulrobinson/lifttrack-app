@@ -662,31 +662,6 @@ describe("weight unit setting", () => {
     expect(within(card).getByTestId("exercise-weight")).toHaveTextContent("30lbs");
   });
 
-  it("weight prompt shows the configured unit label", async () => {
-    const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30, maxReps: 12, lastReps: 8 }));
-    saveSettings({ showSeparateBars: false, weightUnit: "lbs" });
-    renderApp();
-
-    // Start a session
-    await user.click(screen.getByTestId("btn-start-session"));
-
-    // Tap max reps to trigger the weight prompt
-    const ex = getExercises().find(e => e.name === "Test Exercise")!;
-    const card = screen.getByTestId(`exercise-card-${ex.id}`);
-    const maxRepSquare = within(card).getByTestId(`rep-square-12`);
-    await user.click(maxRepSquare);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("weight-prompt")).toBeInTheDocument();
-    });
-
-    // The prompt should show "lbs" not "kg"
-    const prompt = screen.getByTestId("weight-prompt");
-    expect(prompt).toHaveTextContent("lbs");
-    expect(prompt).not.toHaveTextContent("kg");
-  });
-
   it("edit exercise sheet shows weight unit label matching setting", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
@@ -1762,37 +1737,16 @@ describe("session summary", () => {
     expect(screen.queryByTestId("summary-sheet")).not.toBeInTheDocument();
   });
 
-  it("exercise logged at max reps appears in summary even if session ends before weight prompt is confirmed", async () => {
+  it("exercise logged at max reps appears in summary", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    // Tap max reps — this used to defer onSetLogged until the weight prompt was confirmed
     await user.click(screen.getByTestId("rep-square-12"));
-    // End session without waiting for or confirming the weight prompt
     await user.click(screen.getByTestId("btn-end-session"));
     await user.click(screen.getByTestId("btn-end-confirm"));
     const sheet = screen.getByTestId("summary-sheet");
     expect(sheet).toBeInTheDocument();
-    expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
-    expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
-  });
-
-  it("exercise logged at max reps appears in summary when weight prompt is cancelled", async () => {
-    const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
-    // Wait for weight prompt and then cancel it
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.click(screen.getByTestId("weight-prompt-cancel"));
-    // The exercise should still be counted
-    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
-    // End session — exercise must appear in summary
-    await user.click(screen.getByTestId("btn-end-session"));
-    await user.click(screen.getByTestId("btn-end-confirm"));
-    const sheet = screen.getByTestId("summary-sheet");
     expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
     expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
   });
@@ -1838,77 +1792,61 @@ describe("session counter", () => {
 
 // ─── Weight prompt ──────────────────────────────────────────────────────────
 
-describe("weight prompt", () => {
-  it("shows weight prompt when max reps are tapped", async () => {
+describe("rep suggestions", () => {
+  it("shows max reps suggestion when max reps are tapped", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
+    expect(screen.getByTestId("max-reps-suggestion")).toBeInTheDocument();
+    expect(screen.getByTestId("max-reps-suggestion")).toHaveTextContent("Max reps hit");
   });
 
-  it("cancelling weight prompt dismisses the prompt and keeps the set logged", async () => {
+  it("max reps suggestion has a link that opens the edit dialog", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
     await user.click(screen.getByTestId("rep-square-12"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.click(screen.getByTestId("weight-prompt-cancel"));
-    expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
-    // The set is already committed — session counter must still show 1
-    expect(screen.getByTestId("session-counter")).toHaveTextContent("1");
+    await user.click(screen.getByTestId("max-reps-edit-link"));
+    expect(screen.getByTestId("edit-sheet")).toBeInTheDocument();
   });
 
-  it("confirming weight prompt logs the set and updates weight", async () => {
+  it("does not show max reps suggestion when reps are below max", async () => {
     const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
-    await user.click(screen.getByTestId("weight-prompt-confirm"));
-    expect(screen.queryByTestId("weight-prompt")).not.toBeInTheDocument();
-    const stored = getExercises().find((e) => e.id === ex.id);
-    expect(stored?.weight).toBe(12.5);
+    await user.click(screen.getByTestId("rep-square-8"));
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
   });
 
-  it("lower button shows weight decrease prompt", async () => {
+  it("shows below-min suggestion when reps below minimum are tapped", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-4"));
+    expect(screen.getByTestId("below-min-reps-suggestion")).toBeInTheDocument();
+    expect(screen.getByTestId("below-min-reps-suggestion")).toHaveTextContent("consider reducing the weight");
+  });
+
+  it("does not show below-min suggestion when reps meet minimum", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-6"));
+    expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("lower button is not present", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("btn-decrease-weight"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-  });
-
-  it("confirming weight increase stores previousWeight in storage", async () => {
-    const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
-    await user.click(screen.getByTestId("weight-prompt-confirm"));
-    const stored = getExercises().find((e) => e.id === ex.id);
-    expect(stored?.previousWeight).toBe(10);
-    expect(stored?.weightChangedInSession).toBeDefined();
-  });
-
-  it("confirming weight decrease stores previousWeight in storage", async () => {
-    const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 20 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("btn-decrease-weight"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.type(screen.getByTestId("weight-prompt-input"), "18");
-    await user.click(screen.getByTestId("weight-prompt-confirm"));
-    const stored = getExercises().find((e) => e.id === ex.id);
-    expect(stored?.previousWeight).toBe(20);
+    expect(screen.queryByTestId("btn-decrease-weight")).not.toBeInTheDocument();
   });
 });
 
@@ -1926,19 +1864,6 @@ describe("weight context display", () => {
     updateExercise(ex.id, { previousWeight: 28, weightChangedInSession: 999 });
     renderApp();
     expect(screen.getByTestId("previous-weight")).toHaveTextContent("(was 28kg)");
-  });
-
-  it("does not show '(was Xkg)' when weight was changed in the current session", async () => {
-    const user = userEvent.setup();
-    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 8 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
-    await waitFor(() => expect(screen.getByTestId("weight-prompt")).toBeInTheDocument());
-    await user.type(screen.getByTestId("weight-prompt-input"), "12.5");
-    await user.click(screen.getByTestId("weight-prompt-confirm"));
-    // previousWeight is set but weightChangedInSession matches current session
-    expect(screen.queryByTestId("previous-weight")).not.toBeInTheDocument();
   });
 
   it("shows '(was Xkg)' with lbs when weight unit is lbs", () => {

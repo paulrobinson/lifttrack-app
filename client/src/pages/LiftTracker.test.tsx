@@ -364,6 +364,71 @@ describe("exercise ordering", () => {
     // Retired exercises render via plain ExerciseCard without the sortable wrapper
     expect(document.querySelector(".exercise-sortable")).not.toBeInTheDocument();
   });
+
+  it("editing an exercise without changing category preserves its position", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Upper", "Lower"]);
+    createExercise(makeExercise({ name: "Alpha", category: "Upper", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Beta",  category: "Upper", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Gamma", category: "Upper", sortOrder: 2 }));
+    renderApp();
+
+    // Edit the middle exercise (Beta) and change only its name
+    const editBtns = screen.getAllByTestId("btn-edit");
+    await user.click(editBtns[1]); // Beta is at index 1
+    await user.clear(screen.getByTestId("edit-name"));
+    await user.type(screen.getByTestId("edit-name"), "Beta Renamed");
+    await user.click(screen.getByTestId("edit-save"));
+
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[0]).toBe("Alpha");
+    expect(names[1]).toBe("Beta Renamed");
+    expect(names[2]).toBe("Gamma");
+  });
+
+  it("editing an exercise to change category appends it at the end of the new category", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Upper", "Lower"]);
+    createExercise(makeExercise({ name: "Squat",    category: "Lower", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Deadlift", category: "Lower", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", sortOrder: 0 }));
+    renderApp();
+
+    // Edit Pull Ups (Upper) and move it to Lower
+    await user.click(screen.getByTestId("btn-edit")); // only exercise on Upper tab
+    const catSelect = screen.getByTestId("edit-category") as HTMLSelectElement;
+    await user.selectOptions(catSelect, "Lower");
+    await user.click(screen.getByTestId("edit-save"));
+
+    // Now on Lower tab, Pull Ups should be last (sortOrder = 2, after Squat=0, Deadlift=1)
+    await user.click(screen.getByTestId("tab-lower"));
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[0]).toBe("Squat");
+    expect(names[1]).toBe("Deadlift");
+    expect(names[2]).toBe("Pull Ups");
+
+    // Verify the sortOrder value in storage
+    const pullUps = getExercises().find((e) => e.name === "Pull Ups");
+    expect(pullUps?.sortOrder).toBe(2);
+  });
+
+  it("sortOrder is stable after editing when multiple exercises share the same value", async () => {
+    const user = userEvent.setup();
+    saveCategories(["Upper"]);
+    // Simulate the archive/unarchive conflict: two exercises end up with sortOrder=1
+    createExercise(makeExercise({ name: "Alpha", category: "Upper", sortOrder: 0 }));
+    createExercise(makeExercise({ name: "Beta",  category: "Upper", sortOrder: 1 }));
+    createExercise(makeExercise({ name: "Gamma", category: "Upper", sortOrder: 1 }));
+    renderApp();
+
+    // Edit Alpha (unambiguous position 0) and just save
+    await user.click(screen.getAllByTestId("btn-edit")[0]);
+    await user.click(screen.getByTestId("edit-save"));
+
+    // Alpha must still be first
+    const names = screen.getAllByTestId("exercise-name").map((el) => el.textContent);
+    expect(names[0]).toBe("Alpha");
+  });
 });
 
 // ─── Custom categories ────────────────────────────────────────────────────────

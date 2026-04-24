@@ -282,7 +282,7 @@ export default function LiftTracker() {
             {!isActive ? (
               <button className="btn btn-start" onClick={handleStartSession} data-testid="btn-start-session">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z" /></svg>
-                Start
+                Start Workout
               </button>
             ) : (
               <button className="btn btn-end" onClick={() => setConfirmEnd(true)} data-testid="btn-end-session">
@@ -509,7 +509,7 @@ export default function LiftTracker() {
 
         {!isActive && activeTab !== RETIRED_TAB && activeTab !== FAVOURITES_TAB && (
           <p style={{ textAlign: "center", fontSize: "var(--text-xs)", color: "var(--color-text-faint)", marginTop: "4px" }}>
-            Tap <strong style={{ color: "var(--color-success)" }}>Start</strong> to begin your session
+            Tap <strong style={{ color: "var(--color-success)" }}>Start Workout</strong> to begin your session
           </p>
         )}
 

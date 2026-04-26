@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   initStorage,
+  seedPreviewData,
   replaceExercises,
   mergeExercises,
   getExercises,
@@ -63,6 +64,62 @@ describe("initStorage", () => {
     initStorage(); // second call — should be a no-op
     const second = getExercises();
     expect(second.length).toBe(first.length + 1);
+  });
+});
+
+// ─── seedPreviewData ──────────────────────────────────────────────────────────
+
+describe("seedPreviewData", () => {
+  it("creates 6 sample exercises", () => {
+    seedPreviewData();
+    expect(getExercises()).toHaveLength(6);
+  });
+
+  it("creates 12 completed sessions with no active session", () => {
+    seedPreviewData();
+    const sessions = getSessions();
+    expect(sessions).toHaveLength(12);
+    expect(sessions.every((s) => s.endedAt !== null)).toBe(true);
+  });
+
+  it("creates session sets for all sessions", () => {
+    seedPreviewData();
+    const sets = getAllSessionSets();
+    expect(sets.length).toBeGreaterThan(0);
+    // 11 sessions × 9 sets + 1 session × 6 sets = 105
+    expect(sets).toHaveLength(105);
+  });
+
+  it("sets correct categories", () => {
+    seedPreviewData();
+    expect(getCategories()).toEqual(["Upper", "Lower"]);
+  });
+
+  it("is a no-op when exercises already exist", () => {
+    createExercise(makeExercise({ name: "Existing" }));
+    seedPreviewData();
+    expect(getExercises()).toHaveLength(1);
+    expect(getSessions()).toHaveLength(0);
+  });
+
+  it("leaves no active session after seeding", () => {
+    seedPreviewData();
+    expect(getActiveSession()).toBeNull();
+  });
+
+  it("exercises have lastReps and lastRepsSets reflecting the most recent session", () => {
+    seedPreviewData();
+    const exercises = getExercises();
+    expect(exercises.every((e) => e.lastReps !== null)).toBe(true);
+    expect(exercises.every((e) => Array.isArray(e.lastRepsSets))).toBe(true);
+  });
+
+  it("produces exercise history for each exercise", () => {
+    seedPreviewData();
+    const exercises = getExercises();
+    for (const ex of exercises) {
+      expect(getExerciseHistory(ex.id).length).toBeGreaterThan(0);
+    }
   });
 });
 

@@ -105,9 +105,97 @@ function buildSeeds(): Exercise[] {
   ];
 }
 
+// ─── Preview build seed data ──────────────────────────────────────────────────
+
+function buildPreviewSeeds(): {
+  exercises: Exercise[];
+  sessions: Session[];
+  sets: SessionSet[];
+  categories: string[];
+} {
+  let sortOrder = 0;
+  const mkEx = (
+    name: string, category: string, weight: number, maxReps: number, numSets: number,
+    lastReps: number, lastRepsSets: number[], isFavourite?: boolean
+  ): Exercise => ({
+    id: nextId(), name, category, weight, maxReps, sets: numSets, lastReps,
+    lastRepsSets, sortOrder: sortOrder++, archived: false,
+    ...(isFavourite ? { isFavourite } : {}),
+  });
+
+  const bp  = mkEx("Bench Press",       "Upper", 85,   10, 3, 8,  [8, 7, 8],    true);
+  const pu  = mkEx("Pull Ups",          "Upper",  0,   12, 3, 11, [10, 11, 11]);
+  const ohp = mkEx("Overhead Press",    "Upper", 52.5, 10, 3, 9,  [8, 8, 9]);
+  const sq  = mkEx("Back Squat",        "Lower", 105,   8, 3, 7,  [6, 7, 7],    true);
+  const rdl = mkEx("Romanian Deadlift", "Lower",  85,  10, 3, 8,  [7, 8, 8]);
+  const lc  = mkEx("Leg Curls",         "Lower",  40,  12, 3, 12, [11, 12, 12]);
+
+  const exercises = [bp, pu, ohp, sq, rdl, lc];
+  const sessions: Session[] = [];
+  const sets: SessionSet[] = [];
+
+  // Track exercise.lastReps between sessions (for accurate prevLastReps on each set)
+  const lastRepsTracker: Record<number, number | null> = {
+    [bp.id]: null, [pu.id]: null, [ohp.id]: null,
+    [sq.id]: null, [rdl.id]: null, [lc.id]: null,
+  };
+
+  function addSession(
+    dateStr: string,
+    sessionExercises: Array<{ ex: Exercise; weight: number; reps: number[] }>
+  ): void {
+    const session: Session = {
+      id: nextId(),
+      startedAt: `${dateStr}T09:30:00.000Z`,
+      endedAt:   `${dateStr}T10:30:00.000Z`,
+    };
+    sessions.push(session);
+    for (const { ex, weight, reps } of sessionExercises) {
+      const prevLastReps = lastRepsTracker[ex.id];
+      for (const r of reps) {
+        sets.push({ id: nextId(), sessionId: session.id, exerciseId: ex.id, weight, repsAchieved: r, prevLastReps });
+      }
+      lastRepsTracker[ex.id] = reps[reps.length - 1];
+    }
+  }
+
+  // 12 sessions alternating upper/lower over ~2 months, showing weight progression
+  addSession("2026-02-27", [{ ex: bp, weight: 80, reps: [7, 8, 7] }, { ex: pu, weight: 0, reps: [8, 9, 10] }, { ex: ohp, weight: 50, reps: [7, 8, 8] }]);
+  addSession("2026-03-01", [{ ex: sq, weight: 100, reps: [5, 6, 6] }, { ex: rdl, weight: 80, reps: [7, 8, 8] }, { ex: lc, weight: 40, reps: [9, 10, 10] }]);
+  addSession("2026-03-05", [{ ex: bp, weight: 80, reps: [8, 8, 7] }, { ex: pu, weight: 0, reps: [9, 10, 10] }, { ex: ohp, weight: 50, reps: [8, 8, 9] }]);
+  addSession("2026-03-08", [{ ex: sq, weight: 100, reps: [6, 6, 7] }, { ex: rdl, weight: 80, reps: [8, 8, 9] }, { ex: lc, weight: 40, reps: [10, 10, 11] }]);
+  addSession("2026-03-13", [{ ex: bp, weight: 80, reps: [8, 8, 8] }, { ex: pu, weight: 0, reps: [10, 10, 10] }, { ex: ohp, weight: 50, reps: [8, 9, 9] }]);
+  addSession("2026-03-17", [{ ex: sq, weight: 100, reps: [6, 7, 7] }, { ex: rdl, weight: 80, reps: [8, 9, 9] }, { ex: lc, weight: 40, reps: [10, 11, 11] }]);
+  addSession("2026-03-22", [{ ex: bp, weight: 85, reps: [6, 7, 7] }, { ex: pu, weight: 0, reps: [10, 10, 11] }, { ex: ohp, weight: 50, reps: [8, 9, 9] }]);
+  addSession("2026-03-26", [{ ex: sq, weight: 105, reps: [5, 6, 6] }, { ex: rdl, weight: 80, reps: [9, 9, 10] }, { ex: lc, weight: 40, reps: [11, 11, 12] }]);
+  addSession("2026-04-01", [{ ex: bp, weight: 85, reps: [7, 7, 8] }, { ex: pu, weight: 0, reps: [11, 11, 10] }, { ex: ohp, weight: 52.5, reps: [7, 8, 8] }]);
+  addSession("2026-04-06", [{ ex: sq, weight: 105, reps: [6, 6, 7] }, { ex: rdl, weight: 85, reps: [7, 8, 8] }, { ex: lc, weight: 40, reps: [11, 12, 12] }]);
+  addSession("2026-04-12", [{ ex: bp, weight: 85, reps: [8, 7, 8] }, { ex: pu, weight: 0, reps: [10, 11, 11] }, { ex: ohp, weight: 52.5, reps: [8, 8, 9] }]);
+  addSession("2026-04-19", [{ ex: sq, weight: 105, reps: [6, 7, 7] }, { ex: lc, weight: 40, reps: [11, 12, 12] }]);
+
+  return { exercises, sessions, sets, categories: ["Upper", "Lower"] };
+}
+
+/**
+ * Seed sample exercises, sessions, and sets for preview builds.
+ * Only runs when storage is empty — safe to call multiple times.
+ */
+export function seedPreviewData(): void {
+  if (localStorage.getItem(KEYS.exercises)) return;
+  const { exercises, sessions, sets, categories } = buildPreviewSeeds();
+  save(KEYS.exercises, exercises);
+  save(KEYS.sessions, sessions);
+  save(KEYS.sessionSets, sets);
+  localStorage.setItem(KEYS.categories, JSON.stringify(categories));
+}
+
 export function initStorage(): void {
   if (!localStorage.getItem(KEYS.exercises)) {
-    save(KEYS.exercises, buildSeeds());
+    if (import.meta.env.VITE_STORAGE_PREFIX) {
+      seedPreviewData();
+    } else {
+      save(KEYS.exercises, buildSeeds());
+    }
   }
   if (!localStorage.getItem(KEYS.categories)) {
     localStorage.setItem(KEYS.categories, JSON.stringify(DEFAULT_CATEGORIES));

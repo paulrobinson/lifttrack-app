@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   initStorage,
+  seedPreviewData,
   replaceExercises,
   mergeExercises,
   getExercises,
@@ -63,6 +64,124 @@ describe("initStorage", () => {
     initStorage(); // second call — should be a no-op
     const second = getExercises();
     expect(second.length).toBe(first.length + 1);
+  });
+});
+
+// ─── initStorage production safety ───────────────────────────────────────────
+//
+// These tests prove two independent guarantees:
+//   1. Production builds never create sessions/sets (VITE_STORAGE_PREFIX absent).
+//   2. Existing user data is never overwritten regardless of build type.
+
+describe("initStorage production safety", () => {
+  it("never creates sessions or sets in a production build", () => {
+    // VITE_STORAGE_PREFIX is not set in the test environment — exercises are
+    // seeded via buildSeeds(), sessions and sets must remain empty.
+    initStorage();
+    expect(getSessions()).toHaveLength(0);
+    expect(getAllSessionSets()).toHaveLength(0);
+  });
+
+  it("does not overwrite existing user exercises, sessions, or sets on repeat calls", () => {
+    initStorage();
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: getExercises()[0].id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    const exerciseCount = getExercises().length;
+    const sessionCount  = getSessions().length;
+    const setCount      = getAllSessionSets().length;
+
+    initStorage(); // should be a no-op
+
+    expect(getExercises()).toHaveLength(exerciseCount);
+    expect(getSessions()).toHaveLength(sessionCount);
+    expect(getAllSessionSets()).toHaveLength(setCount);
+  });
+});
+
+// ─── initStorage preview behavior ────────────────────────────────────────────
+//
+// Verifies that setting VITE_STORAGE_PREFIX triggers preview seeding and that
+// the existing-data guard still protects users even in preview mode.
+
+describe("initStorage preview behavior", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("seeds exercises, sessions, and sets when VITE_STORAGE_PREFIX is set", () => {
+    vi.stubEnv("VITE_STORAGE_PREFIX", "preview_pr99_");
+    initStorage();
+    expect(getExercises()).toHaveLength(6);
+    expect(getSessions().length).toBeGreaterThan(0);
+    expect(getAllSessionSets().length).toBeGreaterThan(0);
+  });
+
+  it("does not overwrite existing data even when VITE_STORAGE_PREFIX is set", () => {
+    createExercise(makeExercise({ name: "My Exercise" }));
+    vi.stubEnv("VITE_STORAGE_PREFIX", "preview_pr99_");
+    initStorage();
+    // Existing exercise survives; preview seed was blocked by the existing-data guard
+    expect(getExercises()).toHaveLength(1);
+    expect(getExercises()[0].name).toBe("My Exercise");
+    expect(getSessions()).toHaveLength(0);
+  });
+});
+
+// ─── seedPreviewData ──────────────────────────────────────────────────────────
+
+describe("seedPreviewData", () => {
+  it("creates 6 sample exercises", () => {
+    seedPreviewData();
+    expect(getExercises()).toHaveLength(6);
+  });
+
+  it("creates 12 completed sessions with no active session", () => {
+    seedPreviewData();
+    const sessions = getSessions();
+    expect(sessions).toHaveLength(12);
+    expect(sessions.every((s) => s.endedAt !== null)).toBe(true);
+  });
+
+  it("creates session sets for all sessions", () => {
+    seedPreviewData();
+    const sets = getAllSessionSets();
+    expect(sets.length).toBeGreaterThan(0);
+    // 11 sessions × 9 sets + 1 session × 6 sets = 105
+    expect(sets).toHaveLength(105);
+  });
+
+  it("sets correct categories", () => {
+    seedPreviewData();
+    expect(getCategories()).toEqual(["Upper", "Lower"]);
+  });
+
+  it("is a no-op when exercises already exist", () => {
+    createExercise(makeExercise({ name: "Existing" }));
+    seedPreviewData();
+    expect(getExercises()).toHaveLength(1);
+    expect(getSessions()).toHaveLength(0);
+  });
+
+  it("leaves no active session after seeding", () => {
+    seedPreviewData();
+    expect(getActiveSession()).toBeNull();
+  });
+
+  it("exercises have lastReps and lastRepsSets reflecting the most recent session", () => {
+    seedPreviewData();
+    const exercises = getExercises();
+    expect(exercises.every((e) => e.lastReps !== null)).toBe(true);
+    expect(exercises.every((e) => Array.isArray(e.lastRepsSets))).toBe(true);
+  });
+
+  it("produces exercise history for each exercise", () => {
+    seedPreviewData();
+    const exercises = getExercises();
+    for (const ex of exercises) {
+      expect(getExerciseHistory(ex.id).length).toBeGreaterThan(0);
+    }
   });
 });
 

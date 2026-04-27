@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ComposedChart,
   Line,
@@ -94,11 +94,23 @@ export function ExerciseCardBack({
   );
   const readinessStyle = READINESS_STYLES[readiness.status];
 
+  const [brokenYAxis, setBrokenYAxis] = useState(true);
+
   const chartData = history.slice(-15).map((h) => ({
     label: new Date(h.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     weight: h.weight,
     reps: parseFloat(h.avgReps.toFixed(1)),
   }));
+
+  const weightDomain = useMemo((): [number | string, number | string] => {
+    if (!brokenYAxis || chartData.length < 2) return [0, "auto"];
+    const weights = chartData.map((d) => d.weight);
+    const minW = Math.min(...weights);
+    const maxW = Math.max(...weights);
+    const range = maxW - minW;
+    const buffer = Math.max(range * 0.15, 2.5);
+    return [Math.max(0, Math.floor(minW - buffer)), Math.ceil(maxW + buffer)];
+  }, [brokenYAxis, chartData]);
 
   const recentSessions = history.slice(-5).reverse();
 
@@ -186,9 +198,29 @@ export function ExerciseCardBack({
           {/* Progress chart — weight (step) + avg reps (dashed) */}
           {chartData.length >= 2 && (
             <div>
-              <p style={{ fontSize: "10px", fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "8px" }}>
-                Weight & Reps
-              </p>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.04em", textTransform: "uppercase", flex: 1, margin: 0 }}>
+                  Weight & Reps
+                </p>
+                <button
+                  onClick={() => setBrokenYAxis((v) => !v)}
+                  data-testid="btn-toggle-broken-y-axis"
+                  aria-label={brokenYAxis ? "Show full Y axis" : "Show broken Y axis"}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "6px",
+                    padding: "2px 6px",
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    color: brokenYAxis ? "hsl(142 55% 38%)" : "var(--color-text-muted)",
+                    cursor: "pointer",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {brokenYAxis ? "axis: zoomed" : "axis: full"}
+                </button>
+              </div>
               <div style={{ height: 120 }} data-testid="progress-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
@@ -201,6 +233,7 @@ export function ExerciseCardBack({
                     <YAxis
                       yAxisId="weight"
                       orientation="left"
+                      domain={weightDomain}
                       tick={{ fontSize: 9, fill: "hsl(142 55% 38%)" }}
                       axisLine={false}
                       tickLine={false}

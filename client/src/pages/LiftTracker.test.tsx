@@ -2398,4 +2398,49 @@ describe("exercise card flip — progress view", () => {
       expect(within(cards[1]).getByTestId("rep-bar")).toBeInTheDocument();
     }
   });
+
+  it("shows the broken Y axis toggle button when chart data exists", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Squat", category: "Upper", weight: 80, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 80, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 85, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const toggle = within(card).getByTestId("btn-toggle-broken-y-axis");
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveTextContent("axis: zoomed");
+  });
+
+  it("toggles the Y axis label when the broken Y axis button is clicked", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Squat", category: "Upper", weight: 80, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 80, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 85, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const toggle = within(card).getByTestId("btn-toggle-broken-y-axis");
+    expect(toggle).toHaveTextContent("axis: zoomed");
+
+    await user.click(toggle);
+    expect(toggle).toHaveTextContent("axis: full");
+
+    await user.click(toggle);
+    expect(toggle).toHaveTextContent("axis: zoomed");
+  });
 });

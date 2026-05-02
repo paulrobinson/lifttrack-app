@@ -14,6 +14,7 @@ import {
   deleteSessionSetById,
   getSessionSets,
   getDaysSinceLastDone,
+  getLastSessionWeight,
   getExerciseHistory,
   getExercises,
 } from "@/lib/storage";
@@ -398,6 +399,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   );
 
   const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
+  const lastSessionWeight = getLastSessionWeight(exercise.id, sessionId);
+  const weightVsLastSession = lastSessionWeight !== null ? exercise.weight - lastSessionWeight : null;
 
   return (
     <>
@@ -477,6 +480,22 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             )}
             {exercise.tempo && <span> · tempo: {exercise.tempo}</span>}
           </p>
+
+          {weightVsLastSession !== null && weightVsLastSession !== 0 && (
+            <span
+              data-testid={weightVsLastSession > 0 ? "badge-weight-increase" : "badge-weight-decrease"}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "2px",
+                padding: "2px 7px 2px 5px", borderRadius: "99px",
+                background: weightVsLastSession > 0 ? "hsl(220 50% 16%)" : "hsl(45 60% 16%)",
+                border: `1px solid ${weightVsLastSession > 0 ? "hsl(220 40% 26%)" : "hsl(45 50% 26%)"}`,
+                color: weightVsLastSession > 0 ? "hsl(220 70% 65%)" : "hsl(45 80% 55%)",
+                fontSize: "10px", fontWeight: 700,
+              }}
+            >
+              {weightVsLastSession > 0 ? "↑" : "↓"} {weightVsLastSession > 0 ? "+" : ""}{weightVsLastSession}{settings.weightUnit}
+            </span>
+          )}
 
           {isComplete && isDecline && (
             <span data-testid="badge-down" style={{ display: "inline-flex", alignItems: "center", gap: "3px", padding: "2px 8px 2px 6px", borderRadius: "99px", background: "hsl(25 60% 18%)", border: "1px solid hsl(25 50% 30%)", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>

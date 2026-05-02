@@ -2444,3 +2444,89 @@ describe("exercise card flip — progress view", () => {
     expect(toggle).toHaveTextContent("axis: zoomed");
   });
 });
+
+// ─── Weight change indicator ──────────────────────────────────────────────────
+
+describe("weight change indicator", () => {
+  it("shows no indicator when the exercise has no previous session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20 }));
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).queryByTestId("badge-weight-increase")).toBeNull();
+    expect(within(card).queryByTestId("badge-weight-decrease")).toBeNull();
+  });
+
+  it("shows no indicator when the current weight matches the last session weight", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).queryByTestId("badge-weight-increase")).toBeNull();
+    expect(within(card).queryByTestId("badge-weight-decrease")).toBeNull();
+  });
+
+  it("shows an increase badge when the current weight is higher than the last session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("+5");
+  });
+
+  it("shows a decrease badge when the current weight is lower than the last session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 15 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    const badge = within(card).getByTestId("badge-weight-decrease");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("-5");
+  });
+
+  it("uses only the most recent session when computing the weight diff", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 15, repsAchieved: 8 });
+    endSession(s1.id);
+
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    // diff vs most recent session (20), not the older one (15)
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toHaveTextContent("+5");
+  });
+
+  it("does not count an active session when determining the last session weight", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+
+    // Active (in-progress) session with different weight — should be ignored
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 100, repsAchieved: 8 });
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    // Should compare against s1 (20), not s2 (100)
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toHaveTextContent("+5");
+  });
+});

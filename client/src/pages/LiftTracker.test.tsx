@@ -1858,51 +1858,105 @@ describe("session counter", () => {
 // ─── Weight prompt ──────────────────────────────────────────────────────────
 
 describe("rep suggestions", () => {
-  it("shows max reps suggestion when max reps are tapped", async () => {
+  it("shows max reps suggestion when last session hit max reps and session is running", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    // Record a completed session where max reps were hit
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    // Restore lastReps to 12 (logSet overwrites it)
+    updateExercise(ex.id, { lastReps: 12 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("max-reps-suggestion")).toBeInTheDocument();
+    expect(screen.getByTestId("max-reps-suggestion")).toHaveTextContent("Max reps hit last session");
+  });
+
+  it("does not show max reps suggestion when no session is running", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    renderApp();
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("does not show max reps suggestion when last session was below max", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("max reps suggestion disappears once the exercise is logged this session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 12 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
     expect(screen.getByTestId("max-reps-suggestion")).toBeInTheDocument();
-    expect(screen.getByTestId("max-reps-suggestion")).toHaveTextContent("Max reps hit");
+    await user.click(screen.getByTestId("rep-square-10"));
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
   });
 
   it("max reps suggestion has a link that opens the edit dialog", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 12 });
+
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
     await user.click(screen.getByTestId("max-reps-edit-link"));
     expect(screen.getByTestId("edit-sheet")).toBeInTheDocument();
   });
 
-  it("does not show max reps suggestion when reps are below max", async () => {
+  it("shows below-min suggestion when last session was below minimum reps and session is running", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-8"));
-    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
-  });
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 4 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 4 });
 
-  it("shows below-min suggestion when reps below minimum are tapped", async () => {
-    const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-4"));
     expect(screen.getByTestId("below-min-reps-suggestion")).toBeInTheDocument();
     expect(screen.getByTestId("below-min-reps-suggestion")).toHaveTextContent("consider reducing the weight");
   });
 
-  it("does not show below-min suggestion when reps meet minimum", async () => {
+  it("does not show below-min suggestion when no session is running", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    renderApp();
+    expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("does not show below-min suggestion when last session met minimum", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-6"));
+    expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("below-min suggestion disappears once the exercise is logged this session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 4 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 4 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("below-min-reps-suggestion")).toBeInTheDocument();
+    await user.click(screen.getByTestId("rep-square-8"));
     expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
   });
 

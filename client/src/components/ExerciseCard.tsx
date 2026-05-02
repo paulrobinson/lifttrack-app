@@ -388,15 +388,21 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   const cardState = isFlipped ? "" : !isActive ? "idle" : isComplete ? "done" : "active";
   const isArchived = exercise.archived;
 
-  const hitMaxReps = isSingleMode
-    ? loggedReps === exercise.maxReps
-    : loggedRepsSets.some((r) => r === exercise.maxReps);
+  // Build per-set rep data from the previous session for pre-exercise hints
+  const prevSetsToCheck: number[] | null = (() => {
+    if (exerciseInitRef.current.lastRepsSets) {
+      const valid = exerciseInitRef.current.lastRepsSets.filter((r): r is number => r != null);
+      if (valid.length > 0) return valid;
+    }
+    return exerciseInitRef.current.lastReps !== null ? [exerciseInitRef.current.lastReps] : null;
+  })();
 
-  const belowMinReps = exercise.minReps != null && (
-    isSingleMode
-      ? loggedReps !== null && loggedReps < exercise.minReps
-      : loggedRepsSets.some((r) => r !== null && r < exercise.minReps!)
-  );
+  const hitMaxRepsLastSession = sessionId !== null && !isComplete && prevSetsToCheck !== null &&
+    prevSetsToCheck.some((r) => r >= exercise.maxReps);
+
+  const belowMinRepsLastSession = sessionId !== null && !isComplete &&
+    exercise.minReps != null && prevSetsToCheck !== null &&
+    prevSetsToCheck.some((r) => r < exercise.minReps!);
 
   const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
   const lastSessionWeight = getLastSessionWeight(exercise.id, sessionId);
@@ -551,7 +557,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           />
         )}
 
-        {hitMaxReps && (
+        {hitMaxRepsLastSession && (
           <div
             data-testid="max-reps-suggestion"
             style={{
@@ -565,7 +571,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
               color: "hsl(142 60% 45%)",
             }}
           >
-            Max reps hit — consider increasing the weight if you feel comfortable.{" "}
+            Max reps hit last session — consider increasing the weight.{" "}
             <button
               onClick={() => setShowEdit(true)}
               style={{ background: "none", border: "none", cursor: "pointer", color: "hsl(142 60% 45%)", fontWeight: 700, fontSize: "12px", textDecoration: "underline", padding: 0 }}
@@ -575,7 +581,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
             </button>
           </div>
         )}
-        {belowMinReps && (
+        {belowMinRepsLastSession && (
           <div
             data-testid="below-min-reps-suggestion"
             style={{
@@ -589,7 +595,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
               color: "var(--color-warning)",
             }}
           >
-            Below your minimum reps — consider reducing the weight.
+            Below minimum reps last session — consider reducing the weight.
           </div>
         )}
           </div>

@@ -32,7 +32,7 @@ export function computeSetOutcome(
   prevWeight: number,
 ): { decline: boolean; up: boolean } {
   const prev = prevReps ?? 0;
-  const decline = reps < prev || weight < prevWeight;
+  const decline = weight < prevWeight || (reps < prev && weight <= prevWeight);
   const up = !decline && prev > 0 && reps > prev;
   return { decline, up };
 }

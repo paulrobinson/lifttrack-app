@@ -287,6 +287,18 @@ describe("computeSetOutcome", () => {
     expect(result.decline).toBe(true);
     expect(result.up).toBe(false);
   });
+
+  it("does not return decline when reps drop but weight increased", () => {
+    const result = computeSetOutcome(6, 25, 8, 20);
+    expect(result.decline).toBe(false);
+    expect(result.up).toBe(false);
+  });
+
+  it("returns decline when reps drop at the same weight", () => {
+    const result = computeSetOutcome(6, 20, 8, 20);
+    expect(result.decline).toBe(true);
+    expect(result.up).toBe(false);
+  });
 });
 
 // ─── getCategorySummary ────────────────────────────────────────────────────────

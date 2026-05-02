@@ -1039,6 +1039,25 @@ describe("separate bars mode", () => {
     expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
   });
 
+  it("does not show down badge when reps are lower but weight is higher than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 10 }));
+    // Record a previous session at a lighter weight with more reps
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 5, repsAchieved: 10 });
+    endSession(prev.id);
+    // Exercise is now configured at a higher weight (10) but lastReps is still 10
+    updateExercise(ex.id, { lastReps: 10 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    // Log fewer reps (8) at the higher weight (10) — should not be a decline
+    await user.click(screen.getByTestId("rep-square-8"));
+
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+  });
+
   it("no up/down badge when total reps equal previous total", async () => {
     const user = userEvent.setup();
     // lastReps=8, sets=3 → prev total=24; logging 8+8+8=24 → neither Up nor Down

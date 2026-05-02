@@ -203,6 +203,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     lastReps: wasLogged ? preloadedSets[0].prevLastReps : exercise.lastReps,
     lastRepsSets: exercise.lastRepsSets ? [...exercise.lastRepsSets] : null,
     weight: exercise.weight,
+    lastSessionWeight: getLastSessionWeight(exercise.id, sessionId),
     lastTrend: exercise.lastTrend ?? null,
   });
 
@@ -215,15 +216,17 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   );
   const [isDecline, setIsDecline] = useState(() => {
     if (!wasLogged) return false;
-    const prev = preloadedSets[0].prevLastReps ?? 0;
-    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
-    return prev > 0 && curr < prev;
+    const prevReps = preloadedSets[0].prevLastReps;
+    const currReps = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    const prevWeight = exerciseInitRef.current.lastSessionWeight ?? exerciseInitRef.current.weight;
+    return computeSetOutcome(currReps, preloadedSets[0].weight, prevReps, prevWeight).decline;
   });
   const [isUp, setIsUp] = useState(() => {
     if (!wasLogged) return false;
-    const prev = preloadedSets[0].prevLastReps ?? 0;
-    const curr = preloadedSets[preloadedSets.length - 1].repsAchieved;
-    return prev > 0 && curr > prev;
+    const prevReps = preloadedSets[0].prevLastReps;
+    const currReps = preloadedSets[preloadedSets.length - 1].repsAchieved;
+    const prevWeight = exerciseInitRef.current.lastSessionWeight ?? exerciseInitRef.current.weight;
+    return computeSetOutcome(currReps, preloadedSets[0].weight, prevReps, prevWeight).up;
   });
   const [showEdit, setShowEdit] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -283,7 +286,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     const currentReps = lastRepsSets && lastRepsSets.length > 1
       ? reps * exercise.sets
       : reps;
-    return computeSetOutcome(currentReps, weight, prevTotal, exerciseInitRef.current.weight);
+    const prevWeight = exerciseInitRef.current.lastSessionWeight ?? exerciseInitRef.current.weight;
+    return computeSetOutcome(currentReps, weight, prevTotal, prevWeight);
   };
 
   const computeOutcomeForMulti = (completedSets: number[], weight: number) => {
@@ -292,7 +296,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     const prevTotal = lastRepsSets && lastRepsSets.length > 1
       ? lastRepsSets.reduce((a, b) => a + b, 0)
       : (lastReps !== null ? lastReps * exercise.sets : null);
-    return computeSetOutcome(totalCurrent, weight, prevTotal, exerciseInitRef.current.weight);
+    const prevWeight = exerciseInitRef.current.lastSessionWeight ?? exerciseInitRef.current.weight;
+    return computeSetOutcome(totalCurrent, weight, prevTotal, prevWeight);
   };
 
   // ── Single-bar commit & tap
@@ -405,8 +410,9 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     prevSetsToCheck.some((r) => r < exercise.minReps!);
 
   const daysSinceLastDone = getDaysSinceLastDone(exercise.id, sessionId);
-  const lastSessionWeight = getLastSessionWeight(exercise.id, sessionId);
-  const weightVsLastSession = lastSessionWeight !== null ? exercise.weight - lastSessionWeight : null;
+  const weightVsLastSession = exerciseInitRef.current.lastSessionWeight !== null
+    ? exercise.weight - exerciseInitRef.current.lastSessionWeight!
+    : null;
 
   return (
     <>

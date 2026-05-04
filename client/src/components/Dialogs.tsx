@@ -347,6 +347,11 @@ export function SessionSummary({ logs, onClose, weightUnit = "kg" }: { logs: Set
                 <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-muted)" }}>
                   {log.weight}{weightUnit} × {log.repsAchieved}
                 </span>
+                {log.weightVsLastSession !== null && log.weightVsLastSession !== 0 && (
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: log.weightVsLastSession > 0 ? "hsl(220 70% 65%)" : "hsl(45 80% 55%)" }} data-testid={log.weightVsLastSession > 0 ? "summary-weight-increase" : "summary-weight-decrease"}>
+                    {log.weightVsLastSession > 0 ? "↑" : "↓"} {log.weightVsLastSession > 0 ? "+" : ""}{log.weightVsLastSession}{weightUnit}
+                  </span>
+                )}
                 {log.isDecline && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "var(--color-warning)", fontSize: "10px", fontWeight: 700 }}>
                     <IconDecline />

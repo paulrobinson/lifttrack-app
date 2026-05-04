@@ -311,7 +311,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     singleModeSetIdsRef.current = created.map((s) => s.id);
     updateExercise(exercise.id, { lastTrend: up ? "up" : decline ? "down" : null });
     onExerciseChanged();
-    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets });
+    const lsw = exerciseInitRef.current.lastSessionWeight;
+    onSetLogged({ exerciseId: exercise.id, exerciseName: exercise.name, repsAchieved: reps, isDecline: decline, isUp: up, weight, sets: exercise.sets, weightVsLastSession: lsw !== null ? weight - lsw : null });
   };
 
   const handleRepTap = (reps: number) => {
@@ -342,6 +343,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
       setIsDecline(decline);
       setIsUp(up);
       updateExercise(exercise.id, { lastTrend: up ? "up" : decline ? "down" : null });
+      const lsw = exerciseInitRef.current.lastSessionWeight;
       onSetLogged({
         exerciseId: exercise.id,
         exerciseName: exercise.name,
@@ -350,6 +352,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         isUp: up,
         weight,
         sets: exercise.sets,
+        weightVsLastSession: lsw !== null ? weight - lsw : null,
       });
     }
   };

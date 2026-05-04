@@ -1834,6 +1834,63 @@ describe("session summary", () => {
     expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
     expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
   });
+
+  it("shows weight increase badge in summary when weight is higher than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).getByTestId("summary-weight-increase")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("summary-weight-increase")).toHaveTextContent("+5");
+  });
+
+  it("shows weight decrease badge in summary when weight is lower than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 15, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).getByTestId("summary-weight-decrease")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("summary-weight-decrease")).toHaveTextContent("-5");
+  });
+
+  it("shows no weight badge in summary when weight matches last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).queryByTestId("summary-weight-increase")).toBeNull();
+    expect(within(sheet).queryByTestId("summary-weight-decrease")).toBeNull();
+  });
 });
 
 // ─── Session counter ────────────────────────────────────────────────────────
@@ -2435,6 +2492,44 @@ describe("exercise card flip — progress view", () => {
     const table = within(card).getByTestId("recent-sessions");
     expect(table).toHaveTextContent("60kg");
     expect(table).toHaveTextContent("8, 8, 8");
+  });
+
+  it("recent sessions table shows ↑ when weight increased from prior session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 65, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 65, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const table = within(card).getByTestId("recent-sessions");
+    expect(table).toHaveTextContent("65kg ↑");
+  });
+
+  it("recent sessions table shows ↓ when weight decreased from prior session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 55, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 55, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const table = within(card).getByTestId("recent-sessions");
+    expect(table).toHaveTextContent("55kg ↓");
   });
 
   it("shows 'Ready to increase weight' readiness when last two sessions hit max reps", async () => {

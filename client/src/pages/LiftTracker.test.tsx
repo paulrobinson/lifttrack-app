@@ -1039,6 +1039,25 @@ describe("separate bars mode", () => {
     expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
   });
 
+  it("does not show down badge when reps are lower but weight is higher than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 10, maxReps: 12, lastReps: 10 }));
+    // Record a previous session at a lighter weight with more reps
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 5, repsAchieved: 10 });
+    endSession(prev.id);
+    // Exercise is now configured at a higher weight (10) but lastReps is still 10
+    updateExercise(ex.id, { lastReps: 10 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    // Log fewer reps (8) at the higher weight (10) — should not be a decline
+    await user.click(screen.getByTestId("rep-square-8"));
+
+    expect(screen.queryByTestId("badge-down")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-up")).not.toBeInTheDocument();
+  });
+
   it("no up/down badge when total reps equal previous total", async () => {
     const user = userEvent.setup();
     // lastReps=8, sets=3 → prev total=24; logging 8+8+8=24 → neither Up nor Down
@@ -1815,6 +1834,63 @@ describe("session summary", () => {
     expect(within(sheet).getByText(/1 exercise/)).toBeInTheDocument();
     expect(within(sheet).getByText("Pull Ups")).toBeInTheDocument();
   });
+
+  it("shows weight increase badge in summary when weight is higher than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).getByTestId("summary-weight-increase")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("summary-weight-increase")).toHaveTextContent("+5");
+  });
+
+  it("shows weight decrease badge in summary when weight is lower than last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 15, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).getByTestId("summary-weight-decrease")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("summary-weight-decrease")).toHaveTextContent("-5");
+  });
+
+  it("shows no weight badge in summary when weight matches last session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20, lastReps: 8 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 8 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("rep-square-8"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const sheet = screen.getByTestId("summary-sheet");
+    expect(within(sheet).queryByTestId("summary-weight-increase")).toBeNull();
+    expect(within(sheet).queryByTestId("summary-weight-decrease")).toBeNull();
+  });
 });
 
 // ─── Session counter ────────────────────────────────────────────────────────
@@ -1858,51 +1934,105 @@ describe("session counter", () => {
 // ─── Weight prompt ──────────────────────────────────────────────────────────
 
 describe("rep suggestions", () => {
-  it("shows max reps suggestion when max reps are tapped", async () => {
+  it("shows max reps suggestion when last session hit max reps and session is running", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    // Record a completed session where max reps were hit
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    // Restore lastReps to 12 (logSet overwrites it)
+    updateExercise(ex.id, { lastReps: 12 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("max-reps-suggestion")).toBeInTheDocument();
+    expect(screen.getByTestId("max-reps-suggestion")).toHaveTextContent("Max reps hit last session");
+  });
+
+  it("does not show max reps suggestion when no session is running", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    renderApp();
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("does not show max reps suggestion when last session was below max", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("max reps suggestion disappears once the exercise is logged this session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 12 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
     expect(screen.getByTestId("max-reps-suggestion")).toBeInTheDocument();
-    expect(screen.getByTestId("max-reps-suggestion")).toHaveTextContent("Max reps hit");
+    await user.click(screen.getByTestId("rep-square-10"));
+    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
   });
 
   it("max reps suggestion has a link that opens the edit dialog", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 12 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 12 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 12 });
+
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-12"));
     await user.click(screen.getByTestId("max-reps-edit-link"));
     expect(screen.getByTestId("edit-sheet")).toBeInTheDocument();
   });
 
-  it("does not show max reps suggestion when reps are below max", async () => {
+  it("shows below-min suggestion when last session was below minimum reps and session is running", async () => {
     const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, lastReps: 8 }));
-    renderApp();
-    await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-8"));
-    expect(screen.queryByTestId("max-reps-suggestion")).not.toBeInTheDocument();
-  });
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 4 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 4 });
 
-  it("shows below-min suggestion when reps below minimum are tapped", async () => {
-    const user = userEvent.setup();
-    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-4"));
     expect(screen.getByTestId("below-min-reps-suggestion")).toBeInTheDocument();
     expect(screen.getByTestId("below-min-reps-suggestion")).toHaveTextContent("consider reducing the weight");
   });
 
-  it("does not show below-min suggestion when reps meet minimum", async () => {
+  it("does not show below-min suggestion when no session is running", () => {
+    createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    renderApp();
+    expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("does not show below-min suggestion when last session met minimum", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 8 }));
     renderApp();
     await user.click(screen.getByTestId("btn-start-session"));
-    await user.click(screen.getByTestId("rep-square-6"));
+    expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
+  });
+
+  it("below-min suggestion disappears once the exercise is logged this session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", maxReps: 12, minReps: 6, lastReps: 4 }));
+    const prev = startSession();
+    logSet({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 4 });
+    endSession(prev.id);
+    updateExercise(ex.id, { lastReps: 4 });
+
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.getByTestId("below-min-reps-suggestion")).toBeInTheDocument();
+    await user.click(screen.getByTestId("rep-square-8"));
     expect(screen.queryByTestId("below-min-reps-suggestion")).not.toBeInTheDocument();
   });
 
@@ -2364,6 +2494,44 @@ describe("exercise card flip — progress view", () => {
     expect(table).toHaveTextContent("8, 8, 8");
   });
 
+  it("recent sessions table shows ↑ when weight increased from prior session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 65, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 65, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const table = within(card).getByTestId("recent-sessions");
+    expect(table).toHaveTextContent("65kg ↑");
+  });
+
+  it("recent sessions table shows ↓ when weight decreased from prior session", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 55, sets: 1 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 55, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    await user.click(within(card).getByTestId("btn-flip"));
+
+    const table = within(card).getByTestId("recent-sessions");
+    expect(table).toHaveTextContent("55kg ↓");
+  });
+
   it("shows 'Ready to increase weight' readiness when last two sessions hit max reps", async () => {
     const user = userEvent.setup();
     const ex = createExercise(makeExercise({ name: "Bench Press", category: "Upper", weight: 60, maxReps: 10, sets: 1 }));
@@ -2442,5 +2610,91 @@ describe("exercise card flip — progress view", () => {
 
     await user.click(toggle);
     expect(toggle).toHaveTextContent("axis: zoomed");
+  });
+});
+
+// ─── Weight change indicator ──────────────────────────────────────────────────
+
+describe("weight change indicator", () => {
+  it("shows no indicator when the exercise has no previous session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20 }));
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).queryByTestId("badge-weight-increase")).toBeNull();
+    expect(within(card).queryByTestId("badge-weight-decrease")).toBeNull();
+  });
+
+  it("shows no indicator when the current weight matches the last session weight", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 20 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).queryByTestId("badge-weight-increase")).toBeNull();
+    expect(within(card).queryByTestId("badge-weight-decrease")).toBeNull();
+  });
+
+  it("shows an increase badge when the current weight is higher than the last session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("+5");
+  });
+
+  it("shows a decrease badge when the current weight is lower than the last session", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 15 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(session.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    const badge = within(card).getByTestId("badge-weight-decrease");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("-5");
+  });
+
+  it("uses only the most recent session when computing the weight diff", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 15, repsAchieved: 8 });
+    endSession(s1.id);
+
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s2.id);
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    // diff vs most recent session (20), not the older one (15)
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toHaveTextContent("+5");
+  });
+
+  it("does not count an active session when determining the last session weight", () => {
+    const ex = createExercise(makeExercise({ name: "Curl", category: "Upper", weight: 25 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    endSession(s1.id);
+
+    // Active (in-progress) session with different weight — should be ignored
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 100, repsAchieved: 8 });
+
+    renderApp();
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    // Should compare against s1 (20), not s2 (100)
+    const badge = within(card).getByTestId("badge-weight-increase");
+    expect(badge).toHaveTextContent("+5");
   });
 });

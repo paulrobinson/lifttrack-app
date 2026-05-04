@@ -8,6 +8,7 @@ export interface SetLog {
   isUp: boolean;
   weight: number;
   sets: number;
+  weightVsLastSession: number | null;
 }
 
 export type ParsedExercise = Omit<Exercise, "id">;

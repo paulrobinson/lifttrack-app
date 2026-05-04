@@ -540,6 +540,37 @@ export function getExerciseHistory(exerciseId: number): ExerciseSessionHistory[]
 }
 
 /**
+ * Return the weight used for an exercise in its most recent completed session,
+ * excluding the current active session. Returns null if no history exists.
+ */
+export function getLastSessionWeight(exerciseId: number, currentSessionId: number | null): number | null {
+  const allSets = getAllSessionSets();
+  const allSessions = getSessions();
+
+  const exerciseSets = allSets.filter(
+    (set) => set.exerciseId === exerciseId && set.sessionId !== currentSessionId
+  );
+
+  if (exerciseSets.length === 0) return null;
+
+  const sessionMap = new Map(allSessions.map((s) => [s.id, s]));
+  const sessionIds = [...new Set(exerciseSets.map((set) => set.sessionId))];
+  const completedSessions = sessionIds
+    .map((id) => sessionMap.get(id))
+    .filter((s): s is Session => s != null && s.endedAt !== null);
+
+  if (completedSessions.length === 0) return null;
+
+  const mostRecent = completedSessions.reduce((latest, current) => {
+    const diff = new Date(current.startedAt).getTime() - new Date(latest.startedAt).getTime();
+    return diff !== 0 ? (diff > 0 ? current : latest) : (current.id > latest.id ? current : latest);
+  });
+
+  const setsInSession = exerciseSets.filter((s) => s.sessionId === mostRecent.id);
+  return setsInSession.length > 0 ? setsInSession[0].weight : null;
+}
+
+/**
  * Get the number of days since an exercise was last done.
  * Returns null if the exercise has never been done.
  */

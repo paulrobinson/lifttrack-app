@@ -27,6 +27,7 @@ import {
   deleteCategory,
   syncCategoriesFromExercises,
   getDaysSinceLastDone,
+  getLastSessionWeight,
   getExerciseHistory,
   DEFAULT_CATEGORIES,
   type Exercise,
@@ -1119,5 +1120,68 @@ describe("mergeExercises", () => {
     expect(all).toHaveLength(2);
     expect(all.filter((e) => e.name === "Pull Ups")).toHaveLength(1);
     expect(all.filter((e) => e.name === "Bench Press")).toHaveLength(1);
+  });
+});
+
+// ─── getLastSessionWeight ─────────────────────────────────────────────────────
+
+describe("getLastSessionWeight", () => {
+  it("returns null when the exercise has no history", () => {
+    const ex = createExercise(makeExercise({ weight: 50 }));
+    expect(getLastSessionWeight(ex.id, null)).toBeNull();
+  });
+
+  it("returns null when the only session with sets is the current active session", () => {
+    const ex = createExercise(makeExercise({ weight: 50 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 50, repsAchieved: 8 });
+    expect(getLastSessionWeight(ex.id, session.id)).toBeNull();
+  });
+
+  it("returns the weight from the most recent completed session", () => {
+    const ex = createExercise(makeExercise({ weight: 55 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 40, repsAchieved: 8 });
+    endSession(s1.id);
+
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 45, repsAchieved: 8 });
+    endSession(s2.id);
+
+    expect(getLastSessionWeight(ex.id, null)).toBe(45);
+  });
+
+  it("excludes the current active session when finding the last weight", () => {
+    const ex = createExercise(makeExercise({ weight: 60 }));
+
+    const s1 = startSession();
+    logSet({ sessionId: s1.id, exerciseId: ex.id, weight: 50, repsAchieved: 8 });
+    endSession(s1.id);
+
+    const s2 = startSession();
+    logSet({ sessionId: s2.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+
+    expect(getLastSessionWeight(ex.id, s2.id)).toBe(50);
+  });
+
+  it("returns null when the exercise was only done in the current session", () => {
+    const ex = createExercise(makeExercise({ weight: 60 }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    expect(getLastSessionWeight(ex.id, session.id)).toBeNull();
+  });
+
+  it("ignores other exercises when computing the last weight", () => {
+    const ex1 = createExercise(makeExercise({ name: "Curl", weight: 20 }));
+    const ex2 = createExercise(makeExercise({ name: "Press", weight: 40 }));
+
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex1.id, weight: 20, repsAchieved: 8 });
+    logSet({ sessionId: session.id, exerciseId: ex2.id, weight: 40, repsAchieved: 8 });
+    endSession(session.id);
+
+    expect(getLastSessionWeight(ex1.id, null)).toBe(20);
+    expect(getLastSessionWeight(ex2.id, null)).toBe(40);
   });
 });

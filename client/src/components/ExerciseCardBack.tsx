@@ -297,7 +297,9 @@ export function ExerciseCardBack({
             </p>
             <div style={{ display: "flex", flexDirection: "column" }} data-testid="recent-sessions">
               {recentSessions.map((h, i) => {
-                const isWeightUp = i < recentSessions.length - 1 && h.weight > recentSessions[i + 1].weight;
+                const prev = recentSessions[i + 1];
+                const isWeightUp = prev !== undefined && h.weight > prev.weight;
+                const isWeightDown = prev !== undefined && h.weight < prev.weight;
                 const date = new Date(h.date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
                 return (
                   <div
@@ -313,8 +315,8 @@ export function ExerciseCardBack({
                     <span style={{ fontSize: "11px", color: "var(--color-text-muted)", minWidth: "44px", flexShrink: 0 }}>
                       {date}
                     </span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: isWeightUp ? "var(--color-success)" : "var(--color-text)", minWidth: "52px", flexShrink: 0 }}>
-                      {h.weight}{unit}{isWeightUp && " ↑"}
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: isWeightUp ? "var(--color-success)" : isWeightDown ? "var(--color-warning)" : "var(--color-text)", minWidth: "52px", flexShrink: 0 }}>
+                      {h.weight}{unit}{isWeightUp && " ↑"}{isWeightDown && " ↓"}
                     </span>
                     <span style={{ fontSize: "11px", color: "var(--color-text-muted)", flex: 1 }}>
                       {h.repsPerSet.join(", ")}

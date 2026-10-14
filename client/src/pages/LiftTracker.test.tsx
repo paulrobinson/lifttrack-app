@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
@@ -2696,5 +2696,72 @@ describe("weight change indicator", () => {
     // Should compare against s1 (20), not s2 (100)
     const badge = within(card).getByTestId("badge-weight-increase");
     expect(badge).toHaveTextContent("+5");
+  });
+});
+
+// ─── Full-history JSON export ────────────────────────────────────────────────
+
+describe("full-history JSON export", () => {
+  function stubShare() {
+    const share = vi.fn((_data: ShareData) => Promise.resolve());
+    Object.defineProperty(navigator, "share", { value: share, configurable: true, writable: true });
+    Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true, writable: true });
+    return share;
+  }
+
+  afterEach(() => {
+    // @ts-expect-error — remove test stubs
+    delete navigator.share;
+    // @ts-expect-error — remove test stubs
+    delete navigator.canShare;
+  });
+
+  it("End workout saves the session, then shares the full history including it", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", weight: 60 }));
+    const share = stubShare();
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const session = getActiveSession()!;
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    expect(share).toHaveBeenCalledTimes(1);
+    const file = share.mock.calls[0][0].files![0];
+    expect(file.name).toMatch(/^gym-log-\d{8}-\d{6}\.json$/);
+    const data = JSON.parse(await file.text());
+    expect(data.sessionCount).toBe(1);
+    expect(data.sessions[0].end).not.toBeNull();
+    expect(data.sessions[0].exercises[0]).toMatchObject({ name: "Bench Press", sets: [{ kg: 60, reps: 8 }] });
+    expect(screen.getByTestId("summary-sheet")).toBeInTheDocument();
+  });
+
+  it("a cancelled share on End workout shows no error", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "share", { value: () => Promise.reject(new DOMException("x", "AbortError")), configurable: true, writable: true });
+    Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true, writable: true });
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Export failed")).not.toBeInTheDocument();
+  });
+
+  it("the Session Log download button shares the JSON export", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press" }));
+    const session = startSession();
+    logSet({ sessionId: session.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    endSession(session.id);
+    const share = stubShare();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-log"));
+    await user.click(screen.getByTestId("btn-download-log"));
+    expect(share).toHaveBeenCalledTimes(1);
+    const file = share.mock.calls[0][0].files![0];
+    expect(file.name).toMatch(/\.json$/);
+    expect(JSON.parse(await file.text()).schema).toBe(1);
   });
 });

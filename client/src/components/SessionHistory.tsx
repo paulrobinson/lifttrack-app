@@ -9,7 +9,11 @@ import {
   unarchiveSession,
   deleteArchivedSession,
 } from "@/lib/storage";
+import { getCategorySummary, exportGymLog } from "@/lib/gymLogExport";
+import { useToast } from "@/hooks/use-toast";
 import { IconUp, IconDecline, IconArchive, IconTrash } from "./icons";
+
+export { getCategorySummary };
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -100,20 +104,6 @@ export function buildHistoryData(): HistorySessionEntry[] {
     .filter((e): e is HistorySessionEntry => e !== null);
 }
 
-export function getCategorySummary(exercises: HistoryExerciseEntry[]): string | null {
-  if (exercises.length === 0) return null;
-  const counts: Record<string, number> = {};
-  for (const e of exercises) {
-    if (e.category) counts[e.category] = (counts[e.category] ?? 0) + 1;
-  }
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  if (sorted.length === 0) return null;
-  const [topCat, topCount] = sorted[0];
-  if (topCount === exercises.length) return `All ${topCat}`;
-  if (topCount > exercises.length / 2) return `Mostly ${topCat}`;
-  return null;
-}
-
 // ─── Export ────────────────────────────────────────────────────────────────────
 
 export function generateLogText(entries: HistorySessionEntry[], weightUnit: "kg" | "lbs" = "kg"): string {
@@ -156,17 +146,6 @@ export function generateLogText(entries: HistorySessionEntry[], weightUnit: "kg"
   }
 
   return lines.join("\n");
-}
-
-function downloadLog(entries: HistorySessionEntry[], weightUnit: "kg" | "lbs" = "kg") {
-  const text = generateLogText(entries, weightUnit);
-  const blob = new Blob([text], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `exercise-log-${new Date().toISOString().slice(0, 10)}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ─── Session Log Card ───────────────────────────────────────────────────────────
@@ -322,6 +301,7 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
 export function SessionHistoryPanel({ onClose, weightUnit = "kg" }: { onClose: () => void; weightUnit?: "kg" | "lbs" }) {
   const [historyData, setHistoryData] = useState<HistorySessionEntry[]>(() => buildHistoryData());
   const [view, setView] = useState<"active" | "archive">("active");
+  const { toast } = useToast();
 
   const refresh = () => setHistoryData(buildHistoryData());
 
@@ -341,7 +321,13 @@ export function SessionHistoryPanel({ onClose, weightUnit = "kg" }: { onClose: (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {historyData.length > 0 && (
               <button
-                onClick={() => downloadLog(historyData, weightUnit)}
+                onClick={() => {
+                  exportGymLog((err) => toast({
+                    title: "Export failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    variant: "destructive",
+                  }));
+                }}
                 data-testid="btn-download-log"
                 style={{ fontSize: "var(--text-xs)", color: "var(--color-text-faint)", background: "none", border: "1px solid var(--color-border)", borderRadius: "6px", cursor: "pointer", padding: "3px 8px", fontWeight: 600 }}
               >

@@ -39,6 +39,7 @@ import { ImportButton, ExportModal } from "@/components/ImportExport";
 import { SessionHistoryPanel } from "@/components/SessionHistory";
 import { ExerciseCard, SortableExerciseCard } from "@/components/ExerciseCard";
 import { SettingsPanel, AddCategoryDialog, SessionSummary, ExerciseSheet } from "@/components/Dialogs";
+import { exportGymLog } from "@/lib/gymLogExport";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import type { SetLog } from "@/components/types";
@@ -123,6 +124,13 @@ export default function LiftTracker() {
   const handleEndSession = () => {
     if (!activeSession) return;
     endSession(activeSession.id);
+    // Share the full history right away: navigator.share must run synchronously
+    // in the click handler or iOS Safari loses the user activation.
+    exportGymLog((err) => toast({
+      title: "Export failed",
+      description: err instanceof Error ? err.message : String(err),
+      variant: "destructive",
+    }));
     setSummaryLogs([...setLogs]);
     setShowSummary(true);
     setActiveSession(null);

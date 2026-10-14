@@ -12,3 +12,7 @@ global.ResizeObserver = class {
   unobserve() {}
   disconnect() {}
 } as unknown as typeof ResizeObserver;
+
+// jsdom has no object URLs; the JSON export falls back to a blob download.
+if (!URL.createObjectURL) URL.createObjectURL = () => "blob:mock";
+if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};

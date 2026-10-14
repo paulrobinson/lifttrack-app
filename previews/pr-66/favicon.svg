@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark background -->
+  <rect width="32" height="32" rx="7" fill="#16181f"/>
+  <!-- Barbell bar -->
+  <rect x="9" y="15" width="14" height="2" rx="1" fill="#3d4a5c"/>
+  <!-- Left weight plate -->
+  <rect x="3" y="10" width="5" height="12" rx="2" fill="#22c55e"/>
+  <!-- Left collar -->
+  <rect x="8" y="13" width="2" height="6" rx="1" fill="#2d9e4e"/>
+  <!-- Right collar -->
+  <rect x="22" y="13" width="2" height="6" rx="1" fill="#2d9e4e"/>
+  <!-- Right weight plate -->
+  <rect x="24" y="10" width="5" height="12" rx="2" fill="#22c55e"/>
+</svg>

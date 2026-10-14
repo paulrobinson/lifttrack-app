@@ -32,6 +32,7 @@ export interface Session {
   startedAt: string;
   endedAt: string | null;
   archived?: boolean;
+  legacy?: boolean; // true when the session predates per-set timestamps (see migrateStorage)
 }
 
 export interface SessionSet {
@@ -41,6 +42,7 @@ export interface SessionSet {
   weight: number;
   repsAchieved: number;
   prevLastReps: number | null;
+  t?: string | null; // when the set was logged (ISO 8601 with UTC offset); null for legacy sets
 }
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
@@ -66,6 +68,23 @@ function nextId(): number {
   const val = parseInt(localStorage.getItem(KEYS.nextId) ?? "1", 10);
   localStorage.setItem(KEYS.nextId, String(val + 1));
   return val;
+}
+
+// ─── Timestamps ──────────────────────────────────────────────────────────────
+
+/**
+ * Format a date as ISO 8601 in the device's local time with an explicit UTC
+ * offset, e.g. "2026-10-14T18:05:09+01:00". Unlike toISOString() this keeps
+ * the wall-clock time the set was actually done at.
+ */
+export function toIsoWithOffset(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const offsetMin = -date.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMin);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }
 
 // ─── Generic helpers ─────────────────────────────────────────────────────────
@@ -200,6 +219,29 @@ export function initStorage(): void {
   if (!localStorage.getItem(KEYS.categories)) {
     localStorage.setItem(KEYS.categories, JSON.stringify(DEFAULT_CATEGORIES));
   }
+  migrateStorage();
+}
+
+/**
+ * One-way, idempotent migration to per-set timestamps. Sets stored before
+ * timestamps existed have no `t` field: give them `t: null` (nothing else
+ * changes, so no data is lost) and flag their sessions `legacy: true`.
+ */
+export function migrateStorage(): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  const legacySessionIds = new Set<number>();
+  let setsChanged = false;
+  const migratedSets = sets.map((s) => {
+    if (s.t !== undefined) return s;
+    setsChanged = true;
+    legacySessionIds.add(s.sessionId);
+    return { ...s, t: null };
+  });
+  if (!setsChanged) return;
+  save(KEYS.sessionSets, migratedSets);
+  save(KEYS.sessions, getSessions().map((s) =>
+    legacySessionIds.has(s.id) ? { ...s, legacy: true } : s
+  ));
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -392,6 +434,7 @@ export function logSet(params: {
     id: nextId(),
     ...setParams,
     prevLastReps: ex.lastReps,
+    t: toIsoWithOffset(new Date()),
   };
 
   const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
@@ -424,6 +467,7 @@ export function logSetBulk(params: {
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
   const prevLastReps = ex.lastReps;
+  const t = toIsoWithOffset(new Date());
 
   const newSets: SessionSet[] = [];
   const allSets = load<SessionSet>(KEYS.sessionSets);
@@ -436,6 +480,7 @@ export function logSetBulk(params: {
       weight: params.weight,
       repsAchieved: params.repsAchieved,
       prevLastReps,
+      t,
     };
     newSets.push(set);
     allSets.push(set);

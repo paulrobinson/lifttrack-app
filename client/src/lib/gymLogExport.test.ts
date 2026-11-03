@@ -21,6 +21,8 @@ import {
   shareOrDownloadFile,
   exportGymLog,
 } from "./gymLogExport";
+import { buildExportText } from "./exerciseListExport";
+import { getExercises } from "./storage";
 
 const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
 
@@ -308,6 +310,40 @@ describe("exportGymLog", () => {
     const parsed = JSON.parse(await file.text());
     expect(parsed.sessionCount).toBe(1);
     expect(parsed.sessions[0].exercises[0].sets[0]).toMatchObject({ kg: 60, reps: 8 });
+    await p;
+  });
+});
+
+describe("exercise list in the dump", () => {
+  it("is omitted by default", () => {
+    createExercise(makeExercise());
+    expect(buildGymLogExport()).not.toHaveProperty("exerciseList");
+  });
+
+  it("is the first key, matching the Export button text, when requested", () => {
+    createExercise(makeExercise({ name: "Bench Press", category: "Chest" }));
+    createExercise(makeExercise({ name: "Old Lift", category: "Chest", archived: true, sortOrder: 1 }));
+    const data = buildGymLogExport(new Date(), { includeExerciseList: true });
+    expect(Object.keys(data)[0]).toBe("exerciseList");
+    expect(data.exerciseList).toBe(buildExportText(getExercises()));
+    expect(data.exerciseList).toContain("Exercise : Bench Press");
+    expect(data.exerciseList).not.toContain("Old Lift");
+  });
+
+  it("is included even when no sets have been logged", () => {
+    createExercise(makeExercise());
+    const data = buildGymLogExport(new Date(), { includeExerciseList: true });
+    expect(data.sessionCount).toBe(0);
+    expect(data.exerciseList).toContain("Exercise : Bench Press");
+  });
+
+  it("exportGymLog writes it at the top of the shared file", async () => {
+    createExercise(makeExercise());
+    const { share } = stubShare(() => Promise.resolve(), () => true);
+    const p = exportGymLog(undefined, { includeExerciseList: true });
+    const text = await (share.mock.calls[0][0].files[0] as File).text();
+    expect(text.startsWith('{\n  "exerciseList": ')).toBe(true);
+    expect(JSON.parse(text).exerciseList).toContain("Exercise : Bench Press");
     await p;
   });
 });

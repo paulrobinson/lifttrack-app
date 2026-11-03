@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
 import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, logSetBulk, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
 import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
+import { buildExportText } from "@/lib/exerciseListExport";
 
 // Mock scrollIntoView for tests (not available in jsdom)
 Element.prototype.scrollIntoView = vi.fn();
@@ -2737,6 +2738,26 @@ describe("full-history JSON export", () => {
     expect(screen.getByTestId("summary-sheet")).toBeInTheDocument();
   });
 
+  it("End workout puts the exercise list export at the top of the dump", async () => {
+    const user = userEvent.setup();
+    const ex = createExercise(makeExercise({ name: "Bench Press", category: "Chest", weight: 60 }));
+    createExercise(makeExercise({ name: "Squat", category: "Legs", weight: 100, sortOrder: 1 }));
+    const share = stubShare();
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    logSet({ sessionId: getActiveSession()!.id, exerciseId: ex.id, weight: 60, repsAchieved: 8 });
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+
+    const text = await share.mock.calls[0][0].files![0].text();
+    const data = JSON.parse(text);
+    expect(Object.keys(data)[0]).toBe("exerciseList");
+    expect(data.exerciseList).toBe(buildExportText(getExercises()));
+    expect(data.exerciseList).toContain("Exercise : Bench Press");
+    expect(data.exerciseList).toContain("Exercise : Squat");
+    expect(text.indexOf('"exerciseList"')).toBeLessThan(text.indexOf('"sessions"'));
+  });
+
   it("a cancelled share on End workout shows no error", async () => {
     const user = userEvent.setup();
     Object.defineProperty(navigator, "share", { value: () => Promise.reject(new DOMException("x", "AbortError")), configurable: true, writable: true });
@@ -2762,6 +2783,8 @@ describe("full-history JSON export", () => {
     expect(share).toHaveBeenCalledTimes(1);
     const file = share.mock.calls[0][0].files![0];
     expect(file.name).toMatch(/\.json$/);
-    expect(JSON.parse(await file.text()).schema).toBe(1);
+    const data = JSON.parse(await file.text());
+    expect(data.schema).toBe(1);
+    expect(data).not.toHaveProperty("exerciseList");
   });
 });

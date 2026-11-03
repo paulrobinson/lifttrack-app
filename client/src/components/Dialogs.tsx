@@ -119,6 +119,48 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
               }} />
             </button>
           </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
+            <div>
+              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
+                Rate exercise difficulty
+              </p>
+              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                Record how many reps you had left in you (0, 1-2, 3+) for each exercise.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.showDifficultyRating}
+              aria-label="Rate exercise difficulty"
+              onClick={() => toggle("showDifficultyRating")}
+              data-testid="toggle-difficulty-rating"
+              style={{
+                flexShrink: 0,
+                marginLeft: "16px",
+                width: "44px",
+                height: "26px",
+                borderRadius: "13px",
+                border: "none",
+                cursor: "pointer",
+                background: settings.showDifficultyRating ? "var(--color-success)" : "var(--color-border)",
+                position: "relative",
+                transition: "background 200ms ease",
+              }}
+            >
+              <span style={{
+                position: "absolute",
+                top: "3px",
+                left: settings.showDifficultyRating ? "21px" : "3px",
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 200ms ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

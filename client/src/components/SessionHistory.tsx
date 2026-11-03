@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   type Session,
   type SessionSet,
+  type RepsInReserve,
   getExercises,
   getSessions,
   getAllSessionSets,
@@ -25,6 +26,7 @@ export interface HistoryExerciseEntry {
   repsAchieved: number;
   prevLastReps: number | null;
   weightIncreased: boolean;
+  rir?: RepsInReserve | null; // difficulty rating (reps left in reserve), if recorded
 }
 
 export interface HistorySessionEntry {
@@ -73,8 +75,10 @@ export function buildHistoryData(): HistorySessionEntry[] {
       if (sessionSets.length === 0) return null;
 
       const byExercise = new Map<number, SessionSet>();
+      const rirByExercise = new Map<number, RepsInReserve>();
       for (const set of sessionSets) {
         byExercise.set(set.exerciseId, set);
+        if (set.rir) rirByExercise.set(set.exerciseId, set.rir);
       }
 
       const exerciseEntries: HistoryExerciseEntry[] = [];
@@ -96,6 +100,7 @@ export function buildHistoryData(): HistorySessionEntry[] {
           repsAchieved: set.repsAchieved,
           prevLastReps: set.prevLastReps,
           weightIncreased,
+          ...(rirByExercise.has(exerciseId) ? { rir: rirByExercise.get(exerciseId)! } : {}),
         });
       });
 
@@ -137,7 +142,8 @@ export function generateLogText(entries: HistorySessionEntry[], weightUnit: "kg"
       const isDown = prev > 0 && ex.repsAchieved < prev;
       const trend = isUp ? " ↑" : isDown ? " ↓" : "";
       const weightNote = ex.weightIncreased ? " (↑wt)" : "";
-      lines.push(`  ${ex.exerciseName.padEnd(35)} ${ex.weight}${weightUnit} × ${ex.repsAchieved}${trend}${weightNote}`);
+      const rirNote = ex.rir ? ` (${ex.rir} left)` : "";
+      lines.push(`  ${ex.exerciseName.padEnd(35)} ${ex.weight}${weightUnit} × ${ex.repsAchieved}${trend}${weightNote}${rirNote}`);
     }
 
     lines.push("");
@@ -223,6 +229,9 @@ function SessionLogCard({ entry, showArchive, showDelete, onArchive, onUnarchive
               </span>
               <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", minWidth: "76px", textAlign: "right" }}>
                 {ex.weight}{weightUnit} × {ex.repsAchieved}
+                {ex.rir && (
+                  <span style={{ color: "var(--color-text-faint)" }} data-testid="history-rir" title="Reps left in reserve"> · {ex.rir} left</span>
+                )}
               </span>
               <div style={{ width: "30px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", flexShrink: 0 }}>
                 {ex.weightIncreased && (

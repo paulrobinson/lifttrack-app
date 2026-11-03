@@ -12,6 +12,7 @@ import {
   initStorage,
   saveSettings,
   toIsoWithOffset,
+  setExerciseRir,
   DEFAULT_SETTINGS,
   type Exercise,
 } from "./storage";
@@ -309,5 +310,22 @@ describe("exportGymLog", () => {
     expect(parsed.sessionCount).toBe(1);
     expect(parsed.sessions[0].exercises[0].sets[0]).toMatchObject({ kg: 60, reps: 8 });
     await p;
+  });
+});
+
+describe("buildGymLogExport difficulty rating", () => {
+  it("includes the reps-in-reserve rating per exercise when recorded and omits it otherwise", () => {
+    const bench = createExercise(makeExercise({ name: "Bench Press" }));
+    const fly = createExercise(makeExercise({ name: "Dumbbell Fly", weight: 12 }));
+    const s = startSession();
+    logSetBulk({ sessionId: s.id, exerciseId: bench.id, weight: 60, repsAchieved: 8, numSets: 3 });
+    logSet({ sessionId: s.id, exerciseId: fly.id, weight: 12, repsAchieved: 12 });
+    setExerciseRir(s.id, bench.id, "1-2");
+    endSession(s.id);
+
+    const [sess] = buildGymLogExport(new Date()).sessions;
+    expect(sess.exercises[0].rir).toBe("1-2");
+    expect(sess.exercises[0].sets[0]).toEqual({ kg: 60, reps: 8, t: expect.any(String) });
+    expect("rir" in sess.exercises[1]).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LiftTracker from "./LiftTracker";
-import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, logSetBulk, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, deleteSessionSetById } from "@/lib/storage";
+import { createExercise, updateExercise, getExercises, getActiveSession, saveExercisesOrder, getCategories, saveCategories, startSession, endSession, logSet, logSetBulk, archiveSession, getSessions, getSessionSets, getAllSessionSets, saveSettings, getSettings, DEFAULT_SETTINGS, deleteSessionSetById } from "@/lib/storage";
 import { generateLogText, type HistorySessionEntry } from "@/components/SessionHistory";
 import { buildExportText } from "@/lib/exerciseListExport";
 
@@ -659,6 +659,26 @@ describe("settings panel", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
 
+  it("the 'Share history when ending a session' toggle is off by default", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    expect(screen.getByTestId("toggle-share-on-end").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("clicking the share-on-end toggle enables it and persists the setting", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-share-on-end");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(getSettings().shareOnEndSession).toBe(true);
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(getSettings().shareOnEndSession).toBe(false);
+  });
+
   it("closing the settings panel via the × button hides the panel", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -722,7 +742,7 @@ describe("weight unit setting", () => {
   it("exercise cards display weight with lbs when setting is lbs", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
-    saveSettings({ showSeparateBars: false, weightUnit: "lbs", showDifficultyRating: false });
+    saveSettings({ ...DEFAULT_SETTINGS, showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
     const card = screen.getByTestId("exercise-card-" + getExercises().find(e => e.name === "Test Exercise")!.id);
     expect(within(card).getByTestId("exercise-weight")).toHaveTextContent("30lbs");
@@ -731,7 +751,7 @@ describe("weight unit setting", () => {
   it("edit exercise sheet shows weight unit label matching setting", async () => {
     const user = userEvent.setup();
     createExercise(makeExercise({ name: "Test Exercise", category: "Upper", weight: 30 }));
-    saveSettings({ showSeparateBars: false, weightUnit: "lbs", showDifficultyRating: false });
+    saveSettings({ ...DEFAULT_SETTINGS, showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
 
     const ex = getExercises().find(e => e.name === "Test Exercise")!;
@@ -2065,7 +2085,7 @@ describe("weight context display", () => {
   it("shows '(was Xkg)' with lbs when weight unit is lbs", () => {
     const ex = createExercise(makeExercise({ name: "Pull Ups", category: "Upper", weight: 30 }));
     updateExercise(ex.id, { previousWeight: 25, weightChangedInSession: 999 });
-    saveSettings({ showSeparateBars: false, weightUnit: "lbs", showDifficultyRating: false });
+    saveSettings({ ...DEFAULT_SETTINGS, showSeparateBars: false, weightUnit: "lbs" });
     renderApp();
     expect(screen.getByTestId("previous-weight")).toHaveTextContent("(was 25lbs)");
   });
@@ -2717,8 +2737,21 @@ describe("full-history JSON export", () => {
     delete navigator.canShare;
   });
 
-  it("End workout saves the session, then shares the full history including it", async () => {
+  it("End workout does not open the share sheet by default", async () => {
     const user = userEvent.setup();
+    const share = stubShare();
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-end-session"));
+    await user.click(screen.getByTestId("btn-end-confirm"));
+    expect(share).not.toHaveBeenCalled();
+    expect(getActiveSession()).toBeNull();
+    expect(screen.getByTestId("summary-sheet")).toBeInTheDocument();
+  });
+
+  it("End workout saves the session, then shares the full history including it when enabled", async () => {
+    const user = userEvent.setup();
+    saveSettings({ ...DEFAULT_SETTINGS, shareOnEndSession: true });
     const ex = createExercise(makeExercise({ name: "Bench Press", weight: 60 }));
     const share = stubShare();
     renderApp();
@@ -2740,6 +2773,7 @@ describe("full-history JSON export", () => {
 
   it("End workout puts the exercise list export at the top of the dump", async () => {
     const user = userEvent.setup();
+    saveSettings({ ...DEFAULT_SETTINGS, shareOnEndSession: true });
     const ex = createExercise(makeExercise({ name: "Bench Press", category: "Chest", weight: 60 }));
     createExercise(makeExercise({ name: "Squat", category: "Legs", weight: 100, sortOrder: 1 }));
     const share = stubShare();
@@ -2760,6 +2794,7 @@ describe("full-history JSON export", () => {
 
   it("a cancelled share on End workout shows no error", async () => {
     const user = userEvent.setup();
+    saveSettings({ ...DEFAULT_SETTINGS, shareOnEndSession: true });
     Object.defineProperty(navigator, "share", { value: () => Promise.reject(new DOMException("x", "AbortError")), configurable: true, writable: true });
     Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true, writable: true });
     renderApp();
@@ -2793,7 +2828,7 @@ describe("full-history JSON export", () => {
 
 describe("difficulty rating", () => {
   function enableRating(extra: Record<string, unknown> = {}) {
-    saveSettings({ showSeparateBars: false, weightUnit: "kg", showDifficultyRating: true, ...extra });
+    saveSettings({ ...DEFAULT_SETTINGS, showDifficultyRating: true, ...extra });
   }
 
   it("settings panel has a difficulty rating toggle that is off by default", async () => {

@@ -23,9 +23,14 @@ export interface Exercise {
 export interface Settings {
   showSeparateBars: boolean;
   weightUnit: "kg" | "lbs";
+  showDifficultyRating: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg" };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false };
+
+/** Difficulty rating: how many more reps the lifter felt they had left ("reps in reserve"). */
+export type RepsInReserve = "0" | "1-2" | "3+";
+export const REPS_IN_RESERVE_OPTIONS: RepsInReserve[] = ["0", "1-2", "3+"];
 
 export interface Session {
   id: number;
@@ -43,6 +48,7 @@ export interface SessionSet {
   repsAchieved: number;
   prevLastReps: number | null;
   t?: string | null; // when the set was logged (ISO 8601 with UTC offset); null for legacy sets
+  rir?: RepsInReserve | null; // difficulty rating for the exercise (reps left in reserve), if recorded
 }
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
@@ -425,8 +431,9 @@ export function logSet(params: {
   weight: number;
   repsAchieved: number;
   setIndex?: number;
+  rir?: RepsInReserve | null;
 }): SessionSet {
-  const { setIndex, ...setParams } = params;
+  const { setIndex, rir, ...setParams } = params;
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
 
@@ -435,6 +442,7 @@ export function logSet(params: {
     ...setParams,
     prevLastReps: ex.lastReps,
     t: toIsoWithOffset(new Date()),
+    ...(rir ? { rir } : {}),
   };
 
   const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
@@ -463,6 +471,7 @@ export function logSetBulk(params: {
   weight: number;
   repsAchieved: number;
   numSets: number;
+  rir?: RepsInReserve | null;
 }): SessionSet[] {
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
@@ -481,6 +490,7 @@ export function logSetBulk(params: {
       repsAchieved: params.repsAchieved,
       prevLastReps,
       t,
+      ...(params.rir ? { rir: params.rir } : {}),
     };
     newSets.push(set);
     allSets.push(set);
@@ -495,6 +505,26 @@ export function logSetBulk(params: {
   updateExercise(params.exerciseId, updates);
 
   return newSets;
+}
+
+/**
+ * Record the difficulty rating for an exercise in a session by stamping it on
+ * every set already logged for that exercise. Pass null to clear it.
+ */
+export function setExerciseRir(sessionId: number, exerciseId: number, rir: RepsInReserve | null): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  save(KEYS.sessionSets, sets.map((s) => {
+    if (s.sessionId !== sessionId || s.exerciseId !== exerciseId) return s;
+    if (rir) return { ...s, rir };
+    const { rir: _removed, ...rest } = s;
+    return rest;
+  }));
+}
+
+/** The difficulty rating recorded for an exercise in a session, or null if none. */
+export function getExerciseRir(sessionId: number, exerciseId: number): RepsInReserve | null {
+  const sets = getSessionSets(sessionId).filter((s) => s.exerciseId === exerciseId && s.rir);
+  return sets.length > 0 ? sets[sets.length - 1].rir! : null;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────

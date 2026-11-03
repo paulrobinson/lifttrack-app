@@ -7,6 +7,9 @@ import {
   type Exercise,
   type SessionSet,
   type Settings,
+  type RepsInReserve,
+  REPS_IN_RESERVE_OPTIONS,
+  setExerciseRir,
   updateExercise,
   deleteExercise,
   logSet,
@@ -176,6 +179,40 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
   );
 }
 
+// ─── Difficulty Rating ──────────────────────────────────────────────────────────
+
+function DifficultyRating({ value, disabled, onSelect }: {
+  value: RepsInReserve | null;
+  disabled: boolean;
+  onSelect: (rir: RepsInReserve) => void;
+}) {
+  return (
+    <div className="rir-row" data-testid="difficulty-rating">
+      <span className="rir-label">Reps left</span>
+      <div className="rir-buttons" role="radiogroup" aria-label="Reps left in reserve">
+        {REPS_IN_RESERVE_OPTIONS.map((opt) => {
+          const selected = value === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={`${opt} reps left`}
+              className="rir-btn"
+              disabled={disabled}
+              onClick={(e) => { e.stopPropagation(); onSelect(opt); }}
+              data-testid={`rir-btn-${opt}`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Exercise Card ──────────────────────────────────────────────────────────────
 
 export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
@@ -227,6 +264,10 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     const currReps = preloadedSets[preloadedSets.length - 1].repsAchieved;
     const prevWeight = exerciseInitRef.current.lastSessionWeight ?? exerciseInitRef.current.weight;
     return computeSetOutcome(currReps, preloadedSets[0].weight, prevReps, prevWeight).up;
+  });
+  const [rir, setRir] = useState<RepsInReserve | null>(() => {
+    const rated = preloadedSets.filter((s) => s.rir);
+    return rated.length > 0 ? rated[rated.length - 1].rir! : null;
   });
   const [showEdit, setShowEdit] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -307,7 +348,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     setLoggedReps(reps);
     setIsDecline(decline);
     setIsUp(up);
-    const created = logSetBulk({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, numSets: exercise.sets });
+    const created = logSetBulk({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, numSets: exercise.sets, rir });
     singleModeSetIdsRef.current = created.map((s) => s.id);
     updateExercise(exercise.id, { lastTrend: up ? "up" : decline ? "down" : null });
     onExerciseChanged();
@@ -335,7 +376,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     const newSets = currentSets.map((r, i) => (i === setIndex ? reps : r));
     const newOrder = [...loggedOrder, setIndex];
     setLoggedOrder(newOrder);
-    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, setIndex });
+    const created = logSet({ sessionId, exerciseId: exercise.id, weight, repsAchieved: reps, setIndex, rir });
     setLoggedSetIds((prev) => { const n = [...prev]; n[setIndex] = created.id; return n; });
     onExerciseChanged();
     if (newSets.every((r) => r !== null)) {
@@ -374,6 +415,14 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     if (setId !== null) deleteSessionSetById(setId);
     onExerciseChanged();
     if (wasComplete) { setIsDecline(false); setIsUp(false); updateExercise(exercise.id, { lastTrend: exerciseInitRef.current.lastTrend }); onSetUndone(exercise.id); }
+  };
+
+  // ── Difficulty rating: one option at a time; tapping the selected one clears it
+  const handleRirSelect = (option: RepsInReserve) => {
+    if (!isActive || !sessionId) return;
+    const next = rir === option ? null : option;
+    setRir(next);
+    setExerciseRir(sessionId, exercise.id, next);
   };
 
   const handleEditSave = (data: Partial<Exercise>) => {
@@ -606,6 +655,10 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
           >
             Below minimum reps last session — consider reducing the weight.
           </div>
+        )}
+
+        {settings.showDifficultyRating && sessionId !== null && (
+          <DifficultyRating value={rir} disabled={!isActive} onSelect={handleRirSelect} />
         )}
           </div>
         )}

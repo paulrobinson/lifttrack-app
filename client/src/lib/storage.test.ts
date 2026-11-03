@@ -1185,3 +1185,48 @@ describe("getLastSessionWeight", () => {
     expect(getLastSessionWeight(ex2.id, null)).toBe(40);
   });
 });
+
+// ─── Difficulty rating (reps in reserve) ──────────────────────────────────────
+
+describe("difficulty rating storage", () => {
+  it("is disabled by default in settings", async () => {
+    const { getSettings } = await import("./storage");
+    expect(getSettings().showDifficultyRating).toBe(false);
+  });
+
+  it("logSet and logSetBulk store the rating when given", () => {
+    const ex = createExercise(makeExercise());
+    const s = startSession();
+    const one = logSet({ sessionId: s.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, setIndex: 0, rir: "0" });
+    expect(one.rir).toBe("0");
+    const bulk = logSetBulk({ sessionId: s.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 2, rir: "3+" });
+    expect(bulk.map((b) => b.rir)).toEqual(["3+", "3+"]);
+  });
+
+  it("omits the rating field when not given", () => {
+    const ex = createExercise(makeExercise());
+    const s = startSession();
+    const set = logSet({ sessionId: s.id, exerciseId: ex.id, weight: 20, repsAchieved: 8 });
+    expect("rir" in set).toBe(false);
+  });
+
+  it("setExerciseRir updates every set of that exercise in the session only", async () => {
+    const { setExerciseRir, getExerciseRir } = await import("./storage");
+    const a = createExercise(makeExercise({ name: "A" }));
+    const b = createExercise(makeExercise({ name: "B" }));
+    const s1 = startSession();
+    logSetBulk({ sessionId: s1.id, exerciseId: a.id, weight: 20, repsAchieved: 8, numSets: 3 });
+    logSetBulk({ sessionId: s1.id, exerciseId: b.id, weight: 20, repsAchieved: 8, numSets: 3 });
+
+    setExerciseRir(s1.id, a.id, "1-2");
+    const sets = getSessionSets(s1.id);
+    expect(sets.filter((x) => x.exerciseId === a.id).every((x) => x.rir === "1-2")).toBe(true);
+    expect(sets.filter((x) => x.exerciseId === b.id).every((x) => x.rir === undefined)).toBe(true);
+    expect(getExerciseRir(s1.id, a.id)).toBe("1-2");
+    expect(getExerciseRir(s1.id, b.id)).toBeNull();
+
+    setExerciseRir(s1.id, a.id, null);
+    expect(getSessionSets(s1.id).every((x) => !("rir" in x))).toBe(true);
+    expect(getExerciseRir(s1.id, a.id)).toBeNull();
+  });
+});

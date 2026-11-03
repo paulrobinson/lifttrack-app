@@ -18,6 +18,7 @@ import {
   getSessionSets,
   getDaysSinceLastDone,
   getLastSessionWeight,
+  getLastSessionRir,
   getExerciseHistory,
   getExercises,
 } from "@/lib/storage";
@@ -181,8 +182,9 @@ function RepBar({ exercise, isActive, loggedReps, loggedRepsSets, onTap, onTapSe
 
 // ─── Difficulty Rating ──────────────────────────────────────────────────────────
 
-function DifficultyRating({ value, disabled, onSelect }: {
+function DifficultyRating({ value, previous, disabled, onSelect }: {
   value: RepsInReserve | null;
+  previous: RepsInReserve | null; // rating from the last session, outlined for reference
   disabled: boolean;
   onSelect: (rir: RepsInReserve) => void;
 }) {
@@ -200,6 +202,8 @@ function DifficultyRating({ value, disabled, onSelect }: {
               aria-checked={selected}
               aria-label={`${opt} reps left`}
               className="rir-btn"
+              data-previous={previous === opt ? "true" : undefined}
+              title={previous === opt ? "Last session" : undefined}
               disabled={disabled}
               onClick={(e) => { e.stopPropagation(); onSelect(opt); }}
               data-testid={`rir-btn-${opt}`}
@@ -242,6 +246,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
     weight: exercise.weight,
     lastSessionWeight: getLastSessionWeight(exercise.id, sessionId),
     lastTrend: exercise.lastTrend ?? null,
+    lastSessionRir: getLastSessionRir(exercise.id, sessionId),
   });
 
   // ── Single-bar mode state
@@ -658,7 +663,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         )}
 
         {settings.showDifficultyRating && sessionId !== null && (
-          <DifficultyRating value={rir} disabled={!isActive} onSelect={handleRirSelect} />
+          <DifficultyRating value={rir} previous={exerciseInitRef.current.lastSessionRir} disabled={!isActive} onSelect={handleRirSelect} />
         )}
           </div>
         )}

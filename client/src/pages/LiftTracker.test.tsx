@@ -2924,6 +2924,38 @@ describe("difficulty rating", () => {
     expect(screen.getByTestId("history-rir")).toHaveTextContent("3+ left");
   });
 
+  it("outlines the previous session's rating", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    const ex = createExercise(makeExercise());
+    const prev = startSession();
+    logSetBulk({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 8, numSets: 3, rir: "1-2" });
+    endSession(prev.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).getByTestId("rir-btn-1-2")).toHaveAttribute("data-previous", "true");
+    expect(within(card).getByTestId("rir-btn-0")).not.toHaveAttribute("data-previous");
+    expect(within(card).getByTestId("rir-btn-3+")).not.toHaveAttribute("data-previous");
+    // The previous rating is only a hint, not a selection
+    expect(within(card).getByTestId("rir-btn-1-2")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("outlines nothing when the previous session wasn't rated", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    const ex = createExercise(makeExercise());
+    const prev = startSession();
+    logSetBulk({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 8, numSets: 3 });
+    endSession(prev.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    for (const opt of ["0", "1-2", "3+"]) {
+      expect(within(card).getByTestId(`rir-btn-${opt}`)).not.toHaveAttribute("data-previous");
+    }
+  });
+
   it("restores the selected rating when the card remounts (tab switch)", async () => {
     const user = userEvent.setup();
     enableRating();

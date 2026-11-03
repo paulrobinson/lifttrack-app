@@ -615,34 +615,48 @@ export function getExerciseHistory(exerciseId: number): ExerciseSessionHistory[]
 }
 
 /**
- * Return the weight used for an exercise in its most recent completed session,
- * excluding the current active session. Returns null if no history exists.
+ * Return the sets logged for an exercise in its most recent completed session,
+ * excluding the current active session. Returns [] if no history exists.
  */
-export function getLastSessionWeight(exerciseId: number, currentSessionId: number | null): number | null {
-  const allSets = getAllSessionSets();
-  const allSessions = getSessions();
-
-  const exerciseSets = allSets.filter(
+function getLastSessionSets(exerciseId: number, currentSessionId: number | null): SessionSet[] {
+  const exerciseSets = getAllSessionSets().filter(
     (set) => set.exerciseId === exerciseId && set.sessionId !== currentSessionId
   );
+  if (exerciseSets.length === 0) return [];
 
-  if (exerciseSets.length === 0) return null;
-
-  const sessionMap = new Map(allSessions.map((s) => [s.id, s]));
+  const sessionMap = new Map(getSessions().map((s) => [s.id, s]));
   const sessionIds = [...new Set(exerciseSets.map((set) => set.sessionId))];
   const completedSessions = sessionIds
     .map((id) => sessionMap.get(id))
     .filter((s): s is Session => s != null && s.endedAt !== null);
 
-  if (completedSessions.length === 0) return null;
+  if (completedSessions.length === 0) return [];
 
   const mostRecent = completedSessions.reduce((latest, current) => {
     const diff = new Date(current.startedAt).getTime() - new Date(latest.startedAt).getTime();
     return diff !== 0 ? (diff > 0 ? current : latest) : (current.id > latest.id ? current : latest);
   });
 
-  const setsInSession = exerciseSets.filter((s) => s.sessionId === mostRecent.id);
-  return setsInSession.length > 0 ? setsInSession[0].weight : null;
+  return exerciseSets.filter((s) => s.sessionId === mostRecent.id);
+}
+
+/**
+ * Return the weight used for an exercise in its most recent completed session,
+ * excluding the current active session. Returns null if no history exists.
+ */
+export function getLastSessionWeight(exerciseId: number, currentSessionId: number | null): number | null {
+  const sets = getLastSessionSets(exerciseId, currentSessionId);
+  return sets.length > 0 ? sets[0].weight : null;
+}
+
+/**
+ * Return the difficulty rating (reps in reserve) recorded for an exercise in
+ * its most recent completed session, excluding the current active session.
+ * Returns null if there is no previous session or it wasn't rated.
+ */
+export function getLastSessionRir(exerciseId: number, currentSessionId: number | null): RepsInReserve | null {
+  const rated = getLastSessionSets(exerciseId, currentSessionId).filter((s) => s.rir);
+  return rated.length > 0 ? rated[rated.length - 1].rir! : null;
 }
 
 /**

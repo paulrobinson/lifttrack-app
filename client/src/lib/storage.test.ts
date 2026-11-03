@@ -1229,4 +1229,30 @@ describe("difficulty rating storage", () => {
     expect(getSessionSets(s1.id).every((x) => !("rir" in x))).toBe(true);
     expect(getExerciseRir(s1.id, a.id)).toBeNull();
   });
+
+  it("getLastSessionRir returns the rating from the most recent completed session only", async () => {
+    const { getLastSessionRir } = await import("./storage");
+    const ex = createExercise(makeExercise());
+    expect(getLastSessionRir(ex.id, null)).toBeNull();
+
+    const s1 = startSession();
+    logSetBulk({ sessionId: s1.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 2, rir: "0" });
+    endSession(s1.id);
+    const s2 = startSession();
+    logSetBulk({ sessionId: s2.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 2, rir: "3+" });
+    endSession(s2.id);
+    expect(getLastSessionRir(ex.id, null)).toBe("3+");
+
+    // The current (active) session is excluded
+    const s3 = startSession();
+    logSetBulk({ sessionId: s3.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 2, rir: "1-2" });
+    expect(getLastSessionRir(ex.id, s3.id)).toBe("3+");
+    endSession(s3.id);
+
+    // An unrated latest session means no previous rating
+    const s4 = startSession();
+    logSetBulk({ sessionId: s4.id, exerciseId: ex.id, weight: 20, repsAchieved: 8, numSets: 2 });
+    endSession(s4.id);
+    expect(getLastSessionRir(ex.id, null)).toBeNull();
+  });
 });

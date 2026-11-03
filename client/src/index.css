@@ -609,6 +609,9 @@
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
   }
+  .rir-btn[data-previous="true"] {
+    border-color: hsl(220 60% 65%);
+  }
   .rir-btn[aria-checked="true"] {
     background: var(--color-success);
     border-color: var(--color-success);

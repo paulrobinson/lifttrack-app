@@ -17,7 +17,7 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
   onSettingsChange: (s: Settings) => void;
   onClose: () => void;
 }) {
-  const toggle = (key: keyof Settings) => {
+  const toggle = (key: "showSeparateBars" | "showDifficultyRating" | "shareOnEndSession") => {
     const updated = { ...settings, [key]: !settings[key] };
     onSettingsChange(updated);
   };
@@ -79,90 +79,83 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
             </button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
-            <div>
-              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
-                Show sets as separate bars
-              </p>
-              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
-                Display each set as its own rep bar instead of a single combined bar.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={settings.showSeparateBars}
-              onClick={() => toggle("showSeparateBars")}
-              data-testid="toggle-separate-bars"
-              style={{
-                flexShrink: 0,
-                marginLeft: "16px",
-                width: "44px",
-                height: "26px",
-                borderRadius: "13px",
-                border: "none",
-                cursor: "pointer",
-                background: settings.showSeparateBars ? "var(--color-success)" : "var(--color-border)",
-                position: "relative",
-                transition: "background 200ms ease",
-              }}
-            >
-              <span style={{
-                position: "absolute",
-                top: "3px",
-                left: settings.showSeparateBars ? "21px" : "3px",
-                width: "20px",
-                height: "20px",
-                borderRadius: "50%",
-                background: "#fff",
-                transition: "left 200ms ease",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-              }} />
-            </button>
-          </div>
+          <SwitchRow
+            label="Show sets as separate bars"
+            description="Display each set as its own rep bar instead of a single combined bar."
+            checked={settings.showSeparateBars}
+            onToggle={() => toggle("showSeparateBars")}
+            testId="toggle-separate-bars"
+          />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
-            <div>
-              <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
-                Rate exercise difficulty
-              </p>
-              <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
-                Record how many reps you had left in you (0, 1-2, 3+) for each exercise.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={settings.showDifficultyRating}
-              aria-label="Rate exercise difficulty"
-              onClick={() => toggle("showDifficultyRating")}
-              data-testid="toggle-difficulty-rating"
-              style={{
-                flexShrink: 0,
-                marginLeft: "16px",
-                width: "44px",
-                height: "26px",
-                borderRadius: "13px",
-                border: "none",
-                cursor: "pointer",
-                background: settings.showDifficultyRating ? "var(--color-success)" : "var(--color-border)",
-                position: "relative",
-                transition: "background 200ms ease",
-              }}
-            >
-              <span style={{
-                position: "absolute",
-                top: "3px",
-                left: settings.showDifficultyRating ? "21px" : "3px",
-                width: "20px",
-                height: "20px",
-                borderRadius: "50%",
-                background: "#fff",
-                transition: "left 200ms ease",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-              }} />
-            </button>
-          </div>
+          <SwitchRow
+            label="Rate exercise difficulty"
+            description="Record how many reps you had left in you (0, 1-2, 3+) for each exercise."
+            checked={settings.showDifficultyRating}
+            onToggle={() => toggle("showDifficultyRating")}
+            testId="toggle-difficulty-rating"
+          />
+
+          <SwitchRow
+            label="Share history when ending a session"
+            description="Open the share sheet with your full workout history as JSON each time you end a session."
+            checked={settings.shareOnEndSession}
+            onToggle={() => toggle("shareOnEndSession")}
+            testId="toggle-share-on-end"
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+function SwitchRow({ label, description, checked, onToggle, testId }: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onToggle: () => void;
+  testId: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
+      <div>
+        <p style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "2px" }}>
+          {label}
+        </p>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+          {description}
+        </p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={onToggle}
+        data-testid={testId}
+        style={{
+          flexShrink: 0,
+          marginLeft: "16px",
+          width: "44px",
+          height: "26px",
+          borderRadius: "13px",
+          border: "none",
+          cursor: "pointer",
+          background: checked ? "var(--color-success)" : "var(--color-border)",
+          position: "relative",
+          transition: "background 200ms ease",
+        }}
+      >
+        <span style={{
+          position: "absolute",
+          top: "3px",
+          left: checked ? "21px" : "3px",
+          width: "20px",
+          height: "20px",
+          borderRadius: "50%",
+          background: "#fff",
+          transition: "left 200ms ease",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        }} />
+      </button>
     </div>
   );
 }

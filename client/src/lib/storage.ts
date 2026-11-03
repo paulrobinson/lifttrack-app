@@ -24,9 +24,10 @@ export interface Settings {
   showSeparateBars: boolean;
   weightUnit: "kg" | "lbs";
   showDifficultyRating: boolean;
+  shareOnEndSession: boolean;  // open the share sheet with the full history when a session ends
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false, shareOnEndSession: false };
 
 /** Difficulty rating: how many more reps the lifter felt they had left ("reps in reserve"). */
 export type RepsInReserve = "0" | "1-2" | "3+";

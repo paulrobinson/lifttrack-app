@@ -124,13 +124,15 @@ export default function LiftTracker() {
   const handleEndSession = () => {
     if (!activeSession) return;
     endSession(activeSession.id);
-    // Share the full history right away: navigator.share must run synchronously
-    // in the click handler or iOS Safari loses the user activation.
-    exportGymLog((err) => toast({
-      title: "Export failed",
-      description: err instanceof Error ? err.message : String(err),
-      variant: "destructive",
-    }));
+    // Optionally share the full history right away: navigator.share must run
+    // synchronously in the click handler or iOS Safari loses the user activation.
+    if (settings.shareOnEndSession) {
+      exportGymLog((err) => toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      }));
+    }
     setSummaryLogs([...setLogs]);
     setShowSummary(true);
     setActiveSession(null);

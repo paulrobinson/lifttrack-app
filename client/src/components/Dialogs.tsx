@@ -17,7 +17,7 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
   onSettingsChange: (s: Settings) => void;
   onClose: () => void;
 }) {
-  const toggle = (key: "showSeparateBars" | "shareOnEndSession") => {
+  const toggle = (key: "showSeparateBars" | "showDifficultyRating" | "shareOnEndSession") => {
     const updated = { ...settings, [key]: !settings[key] };
     onSettingsChange(updated);
   };
@@ -85,6 +85,14 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
             checked={settings.showSeparateBars}
             onToggle={() => toggle("showSeparateBars")}
             testId="toggle-separate-bars"
+          />
+
+          <SwitchRow
+            label="Rate exercise difficulty"
+            description="Record how many reps you had left in you (0, 1-2, 3+) for each exercise."
+            checked={settings.showDifficultyRating}
+            onToggle={() => toggle("showDifficultyRating")}
+            testId="toggle-difficulty-rating"
           />
 
           <SwitchRow

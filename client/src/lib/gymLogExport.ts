@@ -5,6 +5,7 @@
 
 import {
   type SessionSet,
+  type RepsInReserve,
   getSessions,
   getAllSessionSets,
   getExercises,
@@ -25,6 +26,9 @@ export interface GymLogSet {
 export interface GymLogExercise {
   name: string;
   sets: GymLogSet[];
+  // Difficulty rating: how many more reps the lifter felt they had left in
+  // reserve ("0", "1-2" or "3+"). Omitted when not recorded.
+  rir?: RepsInReserve;
 }
 
 export interface GymLogSession {
@@ -102,14 +106,19 @@ export function buildGymLogExport(now: Date = new Date()): GymLogExport {
         end: session.endedAt ? toIsoWithOffset(new Date(session.endedAt)) : null,
         category: category ?? "Mixed",
         legacy: session.legacy === true,
-        exercises: exerciseIds.map((id) => ({
-          name: exerciseMap.get(id)?.name ?? `Exercise #${id}`,
-          sets: byExercise.get(id)!.map((s) => ({
-            kg: toKg(s.weight),
-            reps: Math.round(s.repsAchieved),
-            t: s.t ?? null,
-          })),
-        })),
+        exercises: exerciseIds.map((id): GymLogExercise => {
+          const sets = byExercise.get(id)!;
+          const rir = [...sets].reverse().find((s) => s.rir)?.rir;
+          return {
+            name: exerciseMap.get(id)?.name ?? `Exercise #${id}`,
+            sets: sets.map((s) => ({
+              kg: toKg(s.weight),
+              reps: Math.round(s.repsAchieved),
+              t: s.t ?? null,
+            })),
+            ...(rir ? { rir } : {}),
+          };
+        }),
       };
     });
 

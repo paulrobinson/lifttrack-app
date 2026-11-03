@@ -23,10 +23,15 @@ export interface Exercise {
 export interface Settings {
   showSeparateBars: boolean;
   weightUnit: "kg" | "lbs";
+  showDifficultyRating: boolean;
   shareOnEndSession: boolean;  // open the share sheet with the full history when a session ends
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", shareOnEndSession: false };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false, shareOnEndSession: false };
+
+/** Difficulty rating: how many more reps the lifter felt they had left ("reps in reserve"). */
+export type RepsInReserve = "0" | "1-2" | "3+";
+export const REPS_IN_RESERVE_OPTIONS: RepsInReserve[] = ["0", "1-2", "3+"];
 
 export interface Session {
   id: number;
@@ -44,6 +49,7 @@ export interface SessionSet {
   repsAchieved: number;
   prevLastReps: number | null;
   t?: string | null; // when the set was logged (ISO 8601 with UTC offset); null for legacy sets
+  rir?: RepsInReserve | null; // difficulty rating for the exercise (reps left in reserve), if recorded
 }
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
@@ -426,8 +432,9 @@ export function logSet(params: {
   weight: number;
   repsAchieved: number;
   setIndex?: number;
+  rir?: RepsInReserve | null;
 }): SessionSet {
-  const { setIndex, ...setParams } = params;
+  const { setIndex, rir, ...setParams } = params;
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
 
@@ -436,6 +443,7 @@ export function logSet(params: {
     ...setParams,
     prevLastReps: ex.lastReps,
     t: toIsoWithOffset(new Date()),
+    ...(rir ? { rir } : {}),
   };
 
   const updates: Partial<Exercise> = { lastReps: params.repsAchieved };
@@ -464,6 +472,7 @@ export function logSetBulk(params: {
   weight: number;
   repsAchieved: number;
   numSets: number;
+  rir?: RepsInReserve | null;
 }): SessionSet[] {
   const exercises = getExercises();
   const ex = exercises.find((e) => e.id === params.exerciseId)!;
@@ -482,6 +491,7 @@ export function logSetBulk(params: {
       repsAchieved: params.repsAchieved,
       prevLastReps,
       t,
+      ...(params.rir ? { rir: params.rir } : {}),
     };
     newSets.push(set);
     allSets.push(set);
@@ -496,6 +506,26 @@ export function logSetBulk(params: {
   updateExercise(params.exerciseId, updates);
 
   return newSets;
+}
+
+/**
+ * Record the difficulty rating for an exercise in a session by stamping it on
+ * every set already logged for that exercise. Pass null to clear it.
+ */
+export function setExerciseRir(sessionId: number, exerciseId: number, rir: RepsInReserve | null): void {
+  const sets = load<SessionSet>(KEYS.sessionSets);
+  save(KEYS.sessionSets, sets.map((s) => {
+    if (s.sessionId !== sessionId || s.exerciseId !== exerciseId) return s;
+    if (rir) return { ...s, rir };
+    const { rir: _removed, ...rest } = s;
+    return rest;
+  }));
+}
+
+/** The difficulty rating recorded for an exercise in a session, or null if none. */
+export function getExerciseRir(sessionId: number, exerciseId: number): RepsInReserve | null {
+  const sets = getSessionSets(sessionId).filter((s) => s.exerciseId === exerciseId && s.rir);
+  return sets.length > 0 ? sets[sets.length - 1].rir! : null;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -586,34 +616,48 @@ export function getExerciseHistory(exerciseId: number): ExerciseSessionHistory[]
 }
 
 /**
- * Return the weight used for an exercise in its most recent completed session,
- * excluding the current active session. Returns null if no history exists.
+ * Return the sets logged for an exercise in its most recent completed session,
+ * excluding the current active session. Returns [] if no history exists.
  */
-export function getLastSessionWeight(exerciseId: number, currentSessionId: number | null): number | null {
-  const allSets = getAllSessionSets();
-  const allSessions = getSessions();
-
-  const exerciseSets = allSets.filter(
+function getLastSessionSets(exerciseId: number, currentSessionId: number | null): SessionSet[] {
+  const exerciseSets = getAllSessionSets().filter(
     (set) => set.exerciseId === exerciseId && set.sessionId !== currentSessionId
   );
+  if (exerciseSets.length === 0) return [];
 
-  if (exerciseSets.length === 0) return null;
-
-  const sessionMap = new Map(allSessions.map((s) => [s.id, s]));
+  const sessionMap = new Map(getSessions().map((s) => [s.id, s]));
   const sessionIds = [...new Set(exerciseSets.map((set) => set.sessionId))];
   const completedSessions = sessionIds
     .map((id) => sessionMap.get(id))
     .filter((s): s is Session => s != null && s.endedAt !== null);
 
-  if (completedSessions.length === 0) return null;
+  if (completedSessions.length === 0) return [];
 
   const mostRecent = completedSessions.reduce((latest, current) => {
     const diff = new Date(current.startedAt).getTime() - new Date(latest.startedAt).getTime();
     return diff !== 0 ? (diff > 0 ? current : latest) : (current.id > latest.id ? current : latest);
   });
 
-  const setsInSession = exerciseSets.filter((s) => s.sessionId === mostRecent.id);
-  return setsInSession.length > 0 ? setsInSession[0].weight : null;
+  return exerciseSets.filter((s) => s.sessionId === mostRecent.id);
+}
+
+/**
+ * Return the weight used for an exercise in its most recent completed session,
+ * excluding the current active session. Returns null if no history exists.
+ */
+export function getLastSessionWeight(exerciseId: number, currentSessionId: number | null): number | null {
+  const sets = getLastSessionSets(exerciseId, currentSessionId);
+  return sets.length > 0 ? sets[0].weight : null;
+}
+
+/**
+ * Return the difficulty rating (reps in reserve) recorded for an exercise in
+ * its most recent completed session, excluding the current active session.
+ * Returns null if there is no previous session or it wasn't rated.
+ */
+export function getLastSessionRir(exerciseId: number, currentSessionId: number | null): RepsInReserve | null {
+  const rated = getLastSessionSets(exerciseId, currentSessionId).filter((s) => s.rir);
+  return rated.length > 0 ? rated[rated.length - 1].rir! : null;
 }
 
 /**

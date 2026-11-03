@@ -2799,3 +2799,210 @@ describe("full-history JSON export", () => {
     expect(JSON.parse(await file.text()).schema).toBe(1);
   });
 });
+
+// ─── Difficulty rating (reps left in reserve) ─────────────────────────────────
+
+describe("difficulty rating", () => {
+  function enableRating(extra: Record<string, unknown> = {}) {
+    saveSettings({ ...DEFAULT_SETTINGS, showDifficultyRating: true, ...extra });
+  }
+
+  it("settings panel has a difficulty rating toggle that is off by default", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByTestId("btn-open-settings"));
+    const toggle = screen.getByTestId("toggle-difficulty-rating");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("does not show rating buttons when the setting is off", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise());
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    expect(screen.queryByTestId("difficulty-rating")).not.toBeInTheDocument();
+  });
+
+  it("does not show rating buttons when no session is active", () => {
+    enableRating();
+    createExercise(makeExercise());
+    renderApp();
+    expect(screen.queryByTestId("difficulty-rating")).not.toBeInTheDocument();
+  });
+
+  it("shows three rating buttons on the card once the setting is enabled during a session", async () => {
+    const user = userEvent.setup();
+    createExercise(makeExercise());
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    await user.click(screen.getByTestId("btn-open-settings"));
+    await user.click(screen.getByTestId("toggle-difficulty-rating"));
+    await user.click(screen.getByTestId("settings-close"));
+    const card = screen.getByTestId("exercise-card-1");
+    const rating = within(card).getByTestId("difficulty-rating");
+    expect(within(rating).getByTestId("rir-btn-0")).toHaveTextContent("0");
+    expect(within(rating).getByTestId("rir-btn-1-2")).toHaveTextContent("1-2");
+    expect(within(rating).getByTestId("rir-btn-3+")).toHaveTextContent("3+");
+  });
+
+  it("only one option can be selected at a time", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise());
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId("exercise-card-1");
+    const b0 = within(card).getByTestId("rir-btn-0");
+    const b12 = within(card).getByTestId("rir-btn-1-2");
+    const b3 = within(card).getByTestId("rir-btn-3+");
+
+    await user.click(b12);
+    expect(b12).toHaveAttribute("aria-checked", "true");
+    expect(b0).toHaveAttribute("aria-checked", "false");
+    expect(b3).toHaveAttribute("aria-checked", "false");
+
+    await user.click(b3);
+    expect(b3).toHaveAttribute("aria-checked", "true");
+    expect(b12).toHaveAttribute("aria-checked", "false");
+    expect(b0).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("tapping the selected option again clears it", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise());
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const b0 = within(screen.getByTestId("exercise-card-1")).getByTestId("rir-btn-0");
+    await user.click(b0);
+    await user.click(b0);
+    expect(b0).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("logs the rating with the sets when selected after logging reps", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise({ sets: 3 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("rep-square-8"));
+    await user.click(within(card).getByTestId("rir-btn-1-2"));
+
+    const sets = getSessionSets(getActiveSession()!.id);
+    expect(sets).toHaveLength(3);
+    expect(sets.every((s) => s.rir === "1-2" && s.weight === 0 && s.repsAchieved === 8)).toBe(true);
+
+    await user.click(within(card).getByTestId("rir-btn-0"));
+    expect(getSessionSets(getActiveSession()!.id).every((s) => s.rir === "0")).toBe(true);
+
+    await user.click(within(card).getByTestId("rir-btn-0"));
+    expect(getSessionSets(getActiveSession()!.id).every((s) => s.rir === undefined)).toBe(true);
+  });
+
+  it("logs the rating with the sets when selected before logging reps", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise({ sets: 3 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("rir-btn-3+"));
+    await user.click(within(card).getByTestId("rep-square-8"));
+    const sets = getSessionSets(getActiveSession()!.id);
+    expect(sets).toHaveLength(3);
+    expect(sets.every((s) => s.rir === "3+")).toBe(true);
+  });
+
+  it("applies the rating to sets logged individually in separate bars mode", async () => {
+    const user = userEvent.setup();
+    enableRating({ showSeparateBars: true });
+    createExercise(makeExercise({ sets: 2 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("rep-square-set-0-8"));
+    await user.click(within(card).getByTestId("rir-btn-0"));
+    await user.click(within(card).getByTestId("rep-square-set-1-7"));
+    const sets = getSessionSets(getActiveSession()!.id);
+    expect(sets.map((s) => s.rir)).toEqual(["0", "0"]);
+  });
+
+  it("generateLogText includes the rating when recorded", () => {
+    const entries: HistorySessionEntry[] = [{
+      session: { id: 1, startedAt: "2026-04-14T10:00:00.000Z", endedAt: "2026-04-14T10:45:00.000Z" },
+      exercises: [
+        { exerciseId: 1, exerciseName: "Bench Press", category: "Chest", weight: 60, repsAchieved: 8, prevLastReps: 8, weightIncreased: false, rir: "1-2" },
+        { exerciseId: 2, exerciseName: "Fly", category: "Chest", weight: 12, repsAchieved: 10, prevLastReps: 10, weightIncreased: false },
+      ],
+    }];
+    const text = generateLogText(entries);
+    expect(text).toContain("60kg × 8 (1-2 left)");
+    expect(text).toMatch(/12kg × 10$/m);
+  });
+
+  it("shows the recorded rating in session history", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise());
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("rep-square-8"));
+    await user.click(within(card).getByTestId("rir-btn-3+"));
+    endSession(getActiveSession()!.id);
+    const { SessionHistoryPanel } = await import("@/components/SessionHistory");
+    render(<SessionHistoryPanel onClose={() => {}} />);
+    expect(screen.getByTestId("history-rir")).toHaveTextContent("3+ left");
+  });
+
+  it("outlines the previous session's rating", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    const ex = createExercise(makeExercise());
+    const prev = startSession();
+    logSetBulk({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 8, numSets: 3, rir: "1-2" });
+    endSession(prev.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    expect(within(card).getByTestId("rir-btn-1-2")).toHaveAttribute("data-previous", "true");
+    expect(within(card).getByTestId("rir-btn-0")).not.toHaveAttribute("data-previous");
+    expect(within(card).getByTestId("rir-btn-3+")).not.toHaveAttribute("data-previous");
+    // The previous rating is only a hint, not a selection
+    expect(within(card).getByTestId("rir-btn-1-2")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("outlines nothing when the previous session wasn't rated", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    const ex = createExercise(makeExercise());
+    const prev = startSession();
+    logSetBulk({ sessionId: prev.id, exerciseId: ex.id, weight: 0, repsAchieved: 8, numSets: 3 });
+    endSession(prev.id);
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    const card = screen.getByTestId(`exercise-card-${ex.id}`);
+    for (const opt of ["0", "1-2", "3+"]) {
+      expect(within(card).getByTestId(`rir-btn-${opt}`)).not.toHaveAttribute("data-previous");
+    }
+  });
+
+  it("restores the selected rating when the card remounts (tab switch)", async () => {
+    const user = userEvent.setup();
+    enableRating();
+    createExercise(makeExercise({ category: "Upper" }));
+    createExercise(makeExercise({ name: "Squat", category: "Lower", sortOrder: 1 }));
+    renderApp();
+    await user.click(screen.getByTestId("btn-start-session"));
+    let card = screen.getByTestId("exercise-card-1");
+    await user.click(within(card).getByTestId("rep-square-8"));
+    await user.click(within(card).getByTestId("rir-btn-1-2"));
+    await user.click(screen.getByTestId("tab-lower"));
+    await user.click(screen.getByTestId("tab-upper"));
+    card = screen.getByTestId("exercise-card-1");
+    expect(within(card).getByTestId("rir-btn-1-2")).toHaveAttribute("aria-checked", "true");
+  });
+});

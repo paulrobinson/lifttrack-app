@@ -23,9 +23,10 @@ export interface Exercise {
 export interface Settings {
   showSeparateBars: boolean;
   weightUnit: "kg" | "lbs";
+  shareOnEndSession: boolean;  // open the share sheet with the full history when a session ends
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg" };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", shareOnEndSession: false };
 
 export interface Session {
   id: number;

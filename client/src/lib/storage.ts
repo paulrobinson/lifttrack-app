@@ -25,9 +25,10 @@ export interface Settings {
   weightUnit: "kg" | "lbs";
   showDifficultyRating: boolean;
   shareOnEndSession: boolean;  // open the share sheet with the full history when a session ends
+  showCoachNotes: boolean;     // fetch and show the coach's notes for today's session
 }
 
-export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false, shareOnEndSession: false };
+export const DEFAULT_SETTINGS: Settings = { showSeparateBars: false, weightUnit: "kg", showDifficultyRating: false, shareOnEndSession: false, showCoachNotes: false };
 
 /** Difficulty rating: how many more reps the lifter felt they had left ("reps in reserve"). */
 export type RepsInReserve = "0" | "1-2" | "3+";

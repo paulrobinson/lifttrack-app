@@ -17,7 +17,7 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
   onSettingsChange: (s: Settings) => void;
   onClose: () => void;
 }) {
-  const toggle = (key: "showSeparateBars" | "showDifficultyRating" | "shareOnEndSession") => {
+  const toggle = (key: "showSeparateBars" | "showDifficultyRating" | "shareOnEndSession" | "showCoachNotes") => {
     const updated = { ...settings, [key]: !settings[key] };
     onSettingsChange(updated);
   };
@@ -101,6 +101,14 @@ export function SettingsPanel({ settings, onSettingsChange, onClose }: {
             checked={settings.shareOnEndSession}
             onToggle={() => toggle("shareOnEndSession")}
             testId="toggle-share-on-end"
+          />
+
+          <SwitchRow
+            label="Show coach notes"
+            description="Show today's coaching advice for your session and exercises, fetched from the nightly coach-notes file."
+            checked={settings.showCoachNotes}
+            onToggle={() => toggle("showCoachNotes")}
+            testId="toggle-coach-notes"
           />
         </div>
       </div>

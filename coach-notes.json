@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "generatedAt": "2026-11-04T15:30:00Z",
+  "session": {
+    "focus": "Legs",
+    "note": "15 km run Saturday: leave 2 reps in reserve on everything. Tonight's CrossFit is upper body, so no clash."
+  },
+  "exercises": {
+    "Romanian Deadlift": {
+      "target": "3 × 8–10 @ 22 kg/hand (DB)",
+      "note": "Slow 3 s lower, stop at mid-shin, flat back"
+    },
+    "Leg Curls": {
+      "target": "3 × 10–12",
+      "note": "Pick a weight you could do 2 more reps with"
+    },
+    "Hip Thrust": {
+      "target": "3 × 10",
+      "note": "Pause 1 s at the top"
+    },
+    "Leg Press": {
+      "target": "3 × 10, moderate",
+      "note": "Keep heels down, feet flat. Not to failure: CF Run Saturday"
+    }
+  }
+}

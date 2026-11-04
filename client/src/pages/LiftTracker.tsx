@@ -40,6 +40,8 @@ import { SessionHistoryPanel } from "@/components/SessionHistory";
 import { ExerciseCard, SortableExerciseCard } from "@/components/ExerciseCard";
 import { SettingsPanel, AddCategoryDialog, SessionSummary, ExerciseSheet } from "@/components/Dialogs";
 import { exportGymLog } from "@/lib/gymLogExport";
+import { findExerciseNote } from "@/lib/coachNotes";
+import { useCoachNotes, CoachSessionBanner } from "@/components/CoachNotes";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import type { SetLog } from "@/components/types";
@@ -86,6 +88,9 @@ export default function LiftTracker() {
   const [confirmRemoveGroup, setConfirmRemoveGroup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => getSettings());
+
+  // Coach notes: refetched on load, when enabled, and whenever a session is opened/started.
+  const coachNotes = useCoachNotes(settings.showCoachNotes, activeSession?.id ?? null);
 
   const handleSettingsChange = useCallback((s: Settings) => {
     saveSettings(s);
@@ -384,6 +389,8 @@ export default function LiftTracker() {
       </header>
 
       <main className="content">
+        {coachNotes && activeTab !== RETIRED_TAB && <CoachSessionBanner notes={coachNotes} />}
+
         {filteredExercises.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--color-text-faint)" }}>
             <p style={{ fontSize: "var(--text-sm)" }}>
@@ -441,6 +448,7 @@ export default function LiftTracker() {
               onTabSwitch={setActiveTab}
               onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
               settings={settings}
+              coachNote={findExerciseNote(coachNotes, ex.name)}
             />
           ))
         ) : activeTab === FAVOURITES_TAB ? (
@@ -456,6 +464,7 @@ export default function LiftTracker() {
               onTabSwitch={setActiveTab}
               onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
               settings={settings}
+              coachNote={findExerciseNote(coachNotes, ex.name)}
             />
           ))
         ) : (
@@ -483,6 +492,7 @@ export default function LiftTracker() {
                   onTabSwitch={setActiveTab}
                   onFavouriteToggle={() => { updateExercise(ex.id, { isFavourite: !ex.isFavourite }); refreshExercises(); }}
                   settings={settings}
+                  coachNote={findExerciseNote(coachNotes, ex.name)}
                 />
               ))}
             </SortableContext>

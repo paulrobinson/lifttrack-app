@@ -6,7 +6,9 @@ import {
   fetchCoachNotes,
   findExerciseNote,
   isForToday,
-  loadCachedCoachNotesForToday,
+  loadCurrentCachedCoachNotes,
+  isCurrent,
+  upcomingLabel,
   londonDate,
   parseCoachNotes,
   readCachedCoachNotes,
@@ -183,26 +185,56 @@ describe("fetchCoachNotes", () => {
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
-describe("loadCachedCoachNotesForToday", () => {
+describe("loadCurrentCachedCoachNotes", () => {
   const now = new Date("2026-11-05T09:00:00Z");
 
   it("returns cached notes dated today", () => {
     localStorage.setItem(COACH_NOTES_CACHE_KEY, JSON.stringify(sample()));
-    expect(loadCachedCoachNotesForToday(now)?.date).toBe("2026-11-05");
+    expect(loadCurrentCachedCoachNotes(now)?.date).toBe("2026-11-05");
   });
 
-  it("ignores cached notes for another day", () => {
+  it("ignores cached notes for an earlier day", () => {
     localStorage.setItem(COACH_NOTES_CACHE_KEY, JSON.stringify(sample({ date: "2026-11-04" })));
-    expect(loadCachedCoachNotesForToday(now)).toBeNull();
+    expect(loadCurrentCachedCoachNotes(now)).toBeNull();
+  });
+
+  it("returns cached notes for a later day", () => {
+    localStorage.setItem(COACH_NOTES_CACHE_KEY, JSON.stringify(sample({ date: "2026-11-06" })));
+    expect(loadCurrentCachedCoachNotes(now)?.date).toBe("2026-11-06");
   });
 
   it("ignores corrupt cache contents", () => {
     localStorage.setItem(COACH_NOTES_CACHE_KEY, "{not json");
-    expect(loadCachedCoachNotesForToday(now)).toBeNull();
+    expect(loadCurrentCachedCoachNotes(now)).toBeNull();
   });
 
   it("survives localStorage throwing", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
-    expect(loadCachedCoachNotesForToday(now)).toBeNull();
+    expect(loadCurrentCachedCoachNotes(now)).toBeNull();
+  });
+});
+
+// ─── Current / upcoming ──────────────────────────────────────────────────────
+
+describe("isCurrent / upcomingLabel", () => {
+  const now = new Date("2026-11-14T19:30:00Z"); // Sat 14 Nov, evening in London (GMT)
+
+  it("today's and later notes are current; earlier notes are not", () => {
+    expect(isCurrent(parseCoachNotes(sample({ date: "2026-11-14" })), now)).toBe(true);
+    expect(isCurrent(parseCoachNotes(sample({ date: "2026-11-15" })), now)).toBe(true);
+    expect(isCurrent(parseCoachNotes(sample({ date: "2026-11-13" })), now)).toBe(false);
+    expect(isCurrent(null, now)).toBe(false);
+  });
+
+  it("labels only notes for a later day", () => {
+    expect(upcomingLabel(parseCoachNotes(sample({ date: "2026-11-15" })), now)).toBe("Sun 15 Nov");
+    expect(upcomingLabel(parseCoachNotes(sample({ date: "2026-11-14" })), now)).toBeNull();
+    expect(upcomingLabel(null, now)).toBeNull();
+  });
+
+  it("uses the London date just after midnight in BST", () => {
+    const bstNow = new Date("2026-07-14T23:10:00Z"); // 00:10 BST, Wed 15 July
+    expect(upcomingLabel(parseCoachNotes(sample({ date: "2026-07-15" })), bstNow)).toBeNull();
+    expect(upcomingLabel(parseCoachNotes(sample({ date: "2026-07-16" })), bstNow)).toBe("Thu 16 Jul");
   });
 });

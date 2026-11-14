@@ -3,18 +3,19 @@ import {
   type CoachExerciseNote,
   type CoachNotes,
   fetchCoachNotes,
-  isForToday,
-  loadCachedCoachNotesForToday,
+  isCurrent,
+  loadCurrentCachedCoachNotes,
+  upcomingLabel,
 } from "@/lib/coachNotes";
 
 /**
- * Coach notes for today, or null. Starts from the localStorage cache (so notes
+ * Coach notes for today or a later day, or null. Starts from the localStorage cache (so notes
  * show instantly and offline), then refreshes in the background whenever the
  * feature is enabled, the app loads, or `refreshKey` (the session) changes.
  * When disabled it returns null and never fetches.
  */
 export function useCoachNotes(enabled: boolean, refreshKey: unknown): CoachNotes | null {
-  const [notes, setNotes] = useState<CoachNotes | null>(() => (enabled ? loadCachedCoachNotesForToday() : null));
+  const [notes, setNotes] = useState<CoachNotes | null>(() => (enabled ? loadCurrentCachedCoachNotes() : null));
 
   useEffect(() => {
     if (!enabled) {
@@ -22,16 +23,16 @@ export function useCoachNotes(enabled: boolean, refreshKey: unknown): CoachNotes
       return;
     }
     let cancelled = false;
-    setNotes(loadCachedCoachNotesForToday());
+    setNotes(loadCurrentCachedCoachNotes());
     fetchCoachNotes().then((fetched) => {
       if (cancelled) return;
-      setNotes(isForToday(fetched) ? fetched : loadCachedCoachNotesForToday());
+      setNotes(isCurrent(fetched) ? fetched : loadCurrentCachedCoachNotes());
     });
     return () => { cancelled = true; };
   }, [enabled, refreshKey]);
 
-  // Re-check the date at render time so notes vanish after midnight (London).
-  return enabled && isForToday(notes) ? notes : null;
+  // Re-check the date at render time so notes vanish once their day has passed (London).
+  return enabled && isCurrent(notes) ? notes : null;
 }
 
 const coachLabelStyle: React.CSSProperties = {
@@ -50,9 +51,22 @@ const coachLabelStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+/** "For Sun 15 Nov" tag shown when the notes are for a later day than today. */
+function ForDay({ label }: { label: string | null | undefined }) {
+  if (!label) return null;
+  return (
+    <span data-testid="coach-for-day" style={{ color: "hsl(265 60% 80%)", fontWeight: 700, marginRight: "6px" }}>
+      For {label}:
+    </span>
+  );
+}
+
 export function CoachSessionBanner({ notes }: { notes: CoachNotes }) {
   const session = notes.session;
-  if (!session) return null;
+  const forLabel = upcomingLabel(notes);
+  // Today's notes without a session line need no banner; upcoming notes always
+  // get one so the day they are for is clear.
+  if (!session && !forLabel) return null;
   return (
     <div
       data-testid="coach-session-banner"
@@ -67,13 +81,14 @@ export function CoachSessionBanner({ notes }: { notes: CoachNotes }) {
       }}
     >
       <span style={coachLabelStyle}>Coach</span>
-      {session.focus && (
+      <ForDay label={forLabel} />
+      {session?.focus && (
         <strong style={{ color: "var(--color-text)", fontWeight: 700 }} data-testid="coach-session-focus">
           {session.focus}
         </strong>
       )}
-      {session.focus && session.note && <span> · </span>}
-      {session.note && <span data-testid="coach-session-note">{session.note}</span>}
+      {session?.focus && session.note && <span> · </span>}
+      {session?.note && <span data-testid="coach-session-note">{session.note}</span>}
     </div>
   );
 }
@@ -92,6 +107,7 @@ export function CoachExerciseNoteLine({ note }: { note: CoachExerciseNote }) {
       }}
     >
       <span style={coachLabelStyle}>Coach</span>
+      <ForDay label={note.forLabel} />
       {note.target && (
         <strong style={{ color: "hsl(265 60% 80%)", fontWeight: 700 }} data-testid="coach-exercise-target">
           {note.target}

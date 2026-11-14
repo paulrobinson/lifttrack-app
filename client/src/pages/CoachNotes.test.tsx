@@ -150,16 +150,35 @@ describe("coach notes rendering", () => {
 describe("coach notes date gating", () => {
   beforeEach(enableCoachNotes);
 
-  it.each([
-    ["yesterday", "2026-11-04"],
-    ["tomorrow", "2026-11-06"],
-  ])("shows nothing for %s's notes", async (_label, date) => {
-    fetchMock.mockResolvedValue(okResponse(notesFile({ date })));
+  it("shows nothing for yesterday's notes", async () => {
+    fetchMock.mockResolvedValue(okResponse(notesFile({ date: "2026-11-04" })));
     render(<LiftTracker />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     await act(async () => {});
     expect(screen.queryByTestId("coach-session-banner")).not.toBeInTheDocument();
     expect(screen.queryByTestId("coach-exercise-note")).not.toBeInTheDocument();
+  });
+
+  it("shows tomorrow's notes, labelled with their day", async () => {
+    fetchMock.mockResolvedValue(okResponse(notesFile({ date: "2026-11-06" })));
+    render(<LiftTracker />);
+    const banner = await screen.findByTestId("coach-session-banner");
+    expect(within(banner).getByTestId("coach-for-day")).toHaveTextContent("For Fri 6 Nov:");
+    const note = within(cardFor("Goblet Squat")).getByTestId("coach-exercise-note");
+    expect(within(note).getByTestId("coach-for-day")).toHaveTextContent("For Fri 6 Nov:");
+  });
+
+  it("shows a dated banner for tomorrow's notes even without a session line", async () => {
+    fetchMock.mockResolvedValue(okResponse(notesFile({ date: "2026-11-06", session: null })));
+    render(<LiftTracker />);
+    const banner = await screen.findByTestId("coach-session-banner");
+    expect(within(banner).getByTestId("coach-for-day")).toHaveTextContent("For Fri 6 Nov:");
+  });
+
+  it("today's notes carry no day label", async () => {
+    render(<LiftTracker />);
+    await screen.findByTestId("coach-session-banner");
+    expect(screen.queryByTestId("coach-for-day")).not.toBeInTheDocument();
   });
 
   it("just after midnight in London (BST, UTC still the previous day) shows the new day's notes", async () => {
@@ -221,7 +240,7 @@ describe("coach notes offline cache", () => {
     expect(within(cardFor("Goblet Squat")).getByTestId("coach-exercise-note")).toBeInTheDocument();
   });
 
-  it("does not render cached notes for another day", async () => {
+  it("does not render cached notes for an earlier day", async () => {
     localStorage.setItem(COACH_NOTES_CACHE_KEY, JSON.stringify(notesFile({ date: "2026-11-04" })));
     fetchMock.mockRejectedValue(new TypeError("offline"));
     render(<LiftTracker />);

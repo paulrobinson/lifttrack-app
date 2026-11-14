@@ -23,6 +23,8 @@ import {
   getExercises,
 } from "@/lib/storage";
 import { ExerciseCardBack } from "./ExerciseCardBack";
+import { CoachExerciseNoteLine } from "./CoachNotes";
+import type { CoachExerciseNote } from "@/lib/coachNotes";
 import { IconCheck, IconDecline, IconUp, IconEdit, IconStarFilled, IconStarEmpty, IconChart } from "./icons";
 import { ExerciseSheet } from "./Dialogs";
 import type { SetLog } from "./types";
@@ -219,7 +221,7 @@ function DifficultyRating({ value, previous, disabled, onSelect }: {
 
 // ─── Exercise Card ──────────────────────────────────────────────────────────────
 
-export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
+export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings, coachNote = null }: {
   exercise: Exercise;
   isActive: boolean;
   sessionId: number | null;
@@ -229,6 +231,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
   onTabSwitch: (cat: string) => void;
   onFavouriteToggle: () => void;
   settings: Settings;
+  coachNote?: CoachExerciseNote | null;
 }) {
   // ── Restore state on remount ──────────────────────────────────────────────
   // Switching tabs unmounts and remounts exercise cards, losing local state.
@@ -665,6 +668,8 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
         {settings.showDifficultyRating && sessionId !== null && (
           <DifficultyRating value={rir} previous={exerciseInitRef.current.lastSessionRir} disabled={!isActive} onSelect={handleRirSelect} />
         )}
+
+        {coachNote && <CoachExerciseNoteLine note={coachNote} />}
           </div>
         )}
       </div>
@@ -694,7 +699,7 @@ export function ExerciseCard({ exercise, isActive, sessionId, onSetLogged, onSet
 
 // ─── Sortable Exercise Card Wrapper ─────────────────────────────────────────────
 
-export function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings }: {
+export function SortableExerciseCard({ exercise, isReordering, isDropped, isActive, sessionId, onSetLogged, onSetUndone, onExerciseChanged, onTabSwitch, onFavouriteToggle, settings, coachNote = null }: {
   exercise: Exercise;
   isReordering: boolean;
   isDropped: boolean;
@@ -706,6 +711,7 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
   onTabSwitch: (cat: string) => void;
   onFavouriteToggle: () => void;
   settings: Settings;
+  coachNote?: CoachExerciseNote | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
 
@@ -737,6 +743,7 @@ export function SortableExerciseCard({ exercise, isReordering, isDropped, isActi
           onTabSwitch={onTabSwitch}
           onFavouriteToggle={onFavouriteToggle}
           settings={settings}
+          coachNote={coachNote}
         />
       </div>
     </div>

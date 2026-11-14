@@ -1,7 +1,8 @@
 // ─── Coach notes ─────────────────────────────────────────────────────────────
 //
-// Read-only advice for today's session, published nightly as a static JSON file
-// on the `coach-notes` branch. Everything here fails silently: any problem
+// Read-only advice for the next session, published nightly as a static JSON file
+// on the `coach-notes` branch. Notes dated today show as-is; notes dated later
+// (published the evening before) also show, labelled with their day. Everything here fails silently: any problem
 // (network, 404, bad JSON, unknown schema, wrong date) simply means "no notes".
 // Notes are never written into session logs or exports — the only thing
 // persisted is a copy of the last good response, under its own localStorage key.
@@ -17,6 +18,8 @@ const FETCH_TIMEOUT_MS = 10_000;
 export interface CoachExerciseNote {
   target: string;
   note: string;
+  /** Set when the notes are for a later day, e.g. "Sun 15 Nov". Not part of the file. */
+  forLabel?: string | null;
 }
 
 export interface CoachNotes {
@@ -91,6 +94,24 @@ export function isForToday(notes: CoachNotes | null | undefined, now: Date = new
   return !!notes && notes.date === londonDate(now);
 }
 
+/** True when the notes are for today or a later day (Europe/London). Past notes are hidden. */
+export function isCurrent(notes: CoachNotes | null | undefined, now: Date = new Date()): notes is CoachNotes {
+  return !!notes && notes.date >= londonDate(now);
+}
+
+/**
+ * Label for notes dated after today, e.g. "Sun 15 Nov"; null for today's notes
+ * (or no notes), so the UI only adds a date when it would otherwise be ambiguous.
+ */
+export function upcomingLabel(notes: CoachNotes | null | undefined, now: Date = new Date()): string | null {
+  if (!notes || notes.date <= londonDate(now)) return null;
+  const [y, m, d] = notes.date.split("-").map(Number);
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })
+    .format(noonUtc)
+    .replace(",", "");
+}
+
 /** Look up the note for an exercise by name (case-insensitive, trimmed). */
 export function findExerciseNote(notes: CoachNotes | null | undefined, exerciseName: string): CoachExerciseNote | null {
   if (!notes) return null;
@@ -116,10 +137,10 @@ function writeCachedCoachNotes(notes: CoachNotes): void {
   }
 }
 
-/** Cached notes, but only if they are for today. */
-export function loadCachedCoachNotesForToday(now: Date = new Date()): CoachNotes | null {
+/** Cached notes, but only if they are for today or a later day. */
+export function loadCurrentCachedCoachNotes(now: Date = new Date()): CoachNotes | null {
   const cached = readCachedCoachNotes();
-  return isForToday(cached, now) ? cached : null;
+  return isCurrent(cached, now) ? cached : null;
 }
 
 // ─── Fetch ───────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import {
   getSettings,
   toIsoWithOffset,
 } from "./storage";
+import { buildExportText } from "./exerciseListExport";
 
 export const GYM_LOG_SCHEMA = 1;
 
@@ -41,6 +42,10 @@ export interface GymLogSession {
 }
 
 export interface GymLogExport {
+  // The exercise list as the Export button would write it (same text the
+  // Import parser accepts). Included in the end-of-session dump so the file
+  // carries the current program alongside the history.
+  exerciseList?: string;
   schema: typeof GYM_LOG_SCHEMA;
   exportedAt: string;
   sessionCount: number;
@@ -75,7 +80,10 @@ export function gymLogFilename(date: Date = new Date()): string {
  * Every session that has at least one logged set (archived and in-progress
  * sessions included), oldest first, with every set in the order it was logged.
  */
-export function buildGymLogExport(now: Date = new Date()): GymLogExport {
+export function buildGymLogExport(
+  now: Date = new Date(),
+  { includeExerciseList = false }: { includeExerciseList?: boolean } = {},
+): GymLogExport {
   const exerciseMap = new Map(getExercises().map((e) => [e.id, e]));
   const toKg = getSettings().weightUnit === "lbs"
     ? (w: number) => Math.round(w * LBS_TO_KG * 100) / 100
@@ -123,6 +131,8 @@ export function buildGymLogExport(now: Date = new Date()): GymLogExport {
     });
 
   return {
+    // First key, so it sits at the top of the file.
+    ...(includeExerciseList ? { exerciseList: buildExportText(getExercises()) } : {}),
     schema: GYM_LOG_SCHEMA,
     exportedAt: toIsoWithOffset(now),
     sessionCount: sessions.length,
@@ -195,11 +205,18 @@ export function shareOrDownloadFile(
   );
 }
 
-/** Build the full-history export and share it. Call synchronously from a click handler. */
-export function exportGymLog(onError?: (err: unknown) => void): Promise<ShareOutcome> {
+/**
+ * Build the full-history export and share it. Call synchronously from a click handler.
+ * With includeExerciseList, the exercise list export goes at the top of the file
+ * (used for the end-of-session dump).
+ */
+export function exportGymLog(
+  onError?: (err: unknown) => void,
+  options: { includeExerciseList?: boolean } = {},
+): Promise<ShareOutcome> {
   try {
     const now = new Date();
-    const json = JSON.stringify(buildGymLogExport(now), null, 2);
+    const json = JSON.stringify(buildGymLogExport(now, options), null, 2);
     return shareOrDownloadFile(json, gymLogFilename(now), onError);
   } catch (err) {
     onError?.(err);

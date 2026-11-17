@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "date": "2026-11-18",
- "generatedAt": "2026-11-17T19:54:07Z",
+ "generatedAt": "2026-11-17T20:12:24Z",
  "session": {
   "focus": "Back",
   "note": "Deadlift + hang clean class tonight: leave 2 reps in reserve, skip shrugs"
@@ -26,6 +26,10 @@
   "Face Pulls": {
    "target": "3 × 12–15 @ next weight up",
    "note": "Hit 15 × 3 last time: go up one step"
+  },
+  "DB Shrugs": {
+   "target": "Skip today",
+   "note": "Deadlifts + hang cleans tonight already load traps and grip"
   }
  }
 }

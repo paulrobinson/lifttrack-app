@@ -1,1 +1,31 @@
-{"schema":1,"date":"2026-11-15","generatedAt":"2026-11-14T19:30:00Z","session":{"focus":"Back","note":"Gym or Sunday Sweat, not both. Rear-delt fly before face pulls."},"exercises":{"Pull Ups":{"target":"3 × 5 @ BW","note":"Last: 5, 5, 4. Aim for 5 on all sets"},"DB Rows":{"target":"3 × 10 @ 30 kg","note":"Last: 9, 9, 9. Add a rep on set 1"},"Cable Row":{"target":"3 × 12 @ 52 kg","note":"Last: 12, 11, 11. Add a rep on set 2"},"Rear Delt Fly":{"target":"3 × 14–15 @ 45 kg","note":"Last: 11, 14, 14. Do before face pulls"},"Face Pulls":{"target":"3 × 15 @ next weight","note":"All sets hit 15 last time: go up a weight"}}}
+{
+ "schema": 1,
+ "date": "2026-11-18",
+ "generatedAt": "2026-11-17T19:54:07Z",
+ "session": {
+  "focus": "Back",
+  "note": "Deadlift + hang clean class tonight: leave 2 reps in reserve, skip shrugs"
+ },
+ "exercises": {
+  "Rear Delt Fly": {
+   "target": "3 × 14, 11, 9 @ 45 kg",
+   "note": "Do before face pulls; +1 rep on sets 2–3"
+  },
+  "Pull Ups": {
+   "target": "3 × 5 @ BW",
+   "note": "Match 5 on all three sets"
+  },
+  "DB Rows": {
+   "target": "3 × 10, 9, 9 @ 30 kg",
+   "note": "+1 rep on set 1; keep 2 in reserve"
+  },
+  "Cable Row": {
+   "target": "3 × 12, 12, 11 @ 52 kg",
+   "note": "+1 rep on set 2"
+  },
+  "Face Pulls": {
+   "target": "3 × 12–15 @ next weight up",
+   "note": "Hit 15 × 3 last time: go up one step"
+  }
+ }
+}

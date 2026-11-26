@@ -1,31 +1,31 @@
 {
- "schema": 1,
- "date": "2026-11-26",
- "generatedAt": "2026-11-25T19:53:47Z",
- "session": {
-  "focus": "Legs",
-  "note": "Hamstring/glute-led, 2–3 reps in reserve: 19 km CF Run on Saturday"
- },
- "exercises": {
-  "Seated Leg Curl": {
-   "target": "3 × 8–10 @ next weight up from 23 kg",
-   "note": "All sets hit 10 last time; stop 2 reps short"
+  "schema": 1,
+  "date": "2026-11-27",
+  "generatedAt": "2026-11-26T19:51:42Z",
+  "session": {
+    "focus": "Back",
+    "note": "19 km CF Run on Sat: leave 1–2 reps in reserve, no grinding"
   },
-  "Leg Extensions": {
-   "target": "3 × 9–10 @ 36 kg",
-   "note": "Add a rep on sets 1–2; no grinding"
-  },
-  "BB RDL": {
-   "target": "3 × 8 @ 25 kg",
-   "note": "Technique only: range and control"
-  },
-  "Hack Squat": {
-   "target": "3 × 8 @ sled only",
-   "note": "Easy reps; plates another week, not before a long run"
-  },
-  "Calves": {
-   "target": "3 × 20 @ 97 kg",
-   "note": "Hold the weight; 3 sets not 4 this week"
+  "exercises": {
+    "Rear Delt Fly": {
+      "target": "3 × 14–15 @ 45 kg",
+      "note": "Before face pulls. Last: 14, 14, 12 — aim 14+ on all three"
+    },
+    "Pull Ups": {
+      "target": "3 × 5 @ BW",
+      "note": "Last: 5, 5, 4 — aim 5 on all three"
+    },
+    "DB Rows": {
+      "target": "3 × 9–10 @ 30 kg",
+      "note": "Last: 9, 9, 9 — get one set of 10"
+    },
+    "Cable Row": {
+      "target": "3 × 11–12 @ 52 kg",
+      "note": "Last: 12, 11, 11 — aim 12 on two sets"
+    },
+    "Face Pulls": {
+      "target": "3 × 12–15 @ next weight up",
+      "note": "15 × 3 at 36 kg last time — go up one step"
+    }
   }
- }
 }
